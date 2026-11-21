@@ -1,0 +1,95 @@
+'use strict';
+const $ = id => document.getElementById(id);
+const money = cents => new Intl.NumberFormat('zh-TW', {style:'currency',currency:'TWD',maximumFractionDigits:2}).format(cents/100);
+let config, account, pendingRequest, apiBase='';
+const statusNames = {pending:'待成交',filled:'已成交',cancelled:'已取消'};
+function showError(error) { $('error').textContent=error.message; $('error').hidden=false; }
+function view(name) { for(const section of document.querySelectorAll('.view')) section.hidden=section.id!==name; for(const nav of document.querySelectorAll('.nav')) nav.classList.toggle('active',nav.dataset.view===name); }
+async function api(path, options={}) {
+  const headers={'Content-Type':'application/json',...options.headers};
+  const token=sessionStorage.getItem('baglo_token');
+  if(token) headers.Authorization='Bearer '+token;
+  const response=await fetch(apiBase+'/api'+path,{...options,headers});
+  let data; try { data=await response.json(); } catch { throw new Error('服務未回傳有效資料，請稍後再試。'); }
+  if(!response.ok) { if(response.status===401) sessionStorage.removeItem('baglo_token'); throw new Error(data.error||'服務暫時無法使用'); }
+  return data;
+}
+async function login() {
+  const bytes=crypto.getRandomValues(new Uint8Array(32));
+  const base64url=buffer=>btoa(String.fromCharCode(...new Uint8Array(buffer))).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
+  const verifier=base64url(bytes), state=crypto.randomUUID();
+  sessionStorage.setItem('baglo_verifier',verifier); sessionStorage.setItem('baglo_oauth_state',state);
+  const challenge=base64url(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier)));
+  const url=new URL(config.auth_domain+'/oauth2/authorize');
+  url.search=new URLSearchParams({client_id:config.client_id,response_type:'code',scope:'openid baglo-api/access',redirect_uri:location.origin+'/',state,code_challenge_method:'S256',code_challenge:challenge});
+  location.assign(url);
+}
+async function finishLogin() {
+  const query=new URLSearchParams(location.search);
+  if(query.has('error')) { history.replaceState(null,'','/'); throw new Error('登入未完成，請重新登入。'); }
+  if(!query.has('code')) return;
+  const expected=sessionStorage.getItem('baglo_oauth_state'), verifier=sessionStorage.getItem('baglo_verifier');
+  history.replaceState(null,'','/');
+  sessionStorage.removeItem('baglo_oauth_state'); sessionStorage.removeItem('baglo_verifier');
+  if(!expected||expected!==query.get('state')||!verifier) throw new Error('登入驗證已失效，請重試。');
+  const response=await fetch(config.auth_domain+'/oauth2/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'authorization_code',client_id:config.client_id,code:query.get('code'),redirect_uri:location.origin+'/',code_verifier:verifier})});
+  const data=await response.json();
+  if(!response.ok||!data.access_token) throw new Error('無法完成登入，請重試。');
+  sessionStorage.setItem('baglo_token',data.access_token);
+}
+function render() {
+  $('cash').textContent=money(account.cash);
+  const reserved=account.orders.filter(o=>o.status==='pending'&&o.side==='buy').reduce((a,o)=>a+o.reserved,0);
+  $('available').textContent=money(account.cash-reserved);
+  const positions=Object.entries(account.positions).filter(([,q])=>q>0);
+  $('holdings').textContent=positions.length.toString().padStart(2,'0');
+  $('positions').replaceChildren();
+  if(!positions.length) { $('positions').className='empty'; $('positions').textContent='尚無持倉。先建立一筆模擬委託。'; }
+  else { $('positions').className=''; const ul=document.createElement('ul'); for(const [symbol,quantity] of positions) { const li=document.createElement('li'); const label=document.createElement('span'), value=document.createElement('strong'); label.textContent=symbol+' '+(config.symbols.find(x=>x.symbol===symbol)?.name||'');value.textContent=quantity+' 股';li.append(label,value);ul.append(li); } $('positions').append(ul); }
+  $('orders').replaceChildren(); $('no-orders').hidden=account.orders.length>0;
+  for(const order of [...account.orders].reverse()) {
+    const tr=document.createElement('tr');
+    for(const value of [order.symbol,order.side==='buy'?'買入':'賣出',order.quantity,money(order.limit_price)]) { const td=document.createElement('td'); td.textContent=value; tr.append(td); }
+    const status=document.createElement('td'), badge=document.createElement('span'); badge.className='status '+order.status;badge.textContent=statusNames[order.status];status.append(badge);tr.append(status);
+    const actions=document.createElement('td');
+    if(order.status==='pending') {
+      for(const [name,action] of [['取消','cancel'],...(config.demo?[['沙盒成交','demo-fill']]:[])]) {
+        const button=document.createElement('button');button.textContent=name;
+        button.onclick=async()=>{ button.disabled=true;try{await api('/orders/'+encodeURIComponent(order.id)+'/'+action,{method:'POST',body:'{}'});await refresh();}catch(e){showError(e);button.disabled=false;} };
+        actions.append(button);
+      }
+    }
+    tr.append(actions);$('orders').append(tr);
+  }
+}
+async function refresh() { account=await api('/account'); render(); }
+$('order-form').onsubmit=async event=>{
+  event.preventDefault();$('error').hidden=true;$('submit-order').disabled=true;
+  const body={symbol:$('symbol').value,side:$('side').value,quantity:Number($('quantity').value),limit_price:Math.round(Number($('price').value)*100)};
+  const payload=JSON.stringify(body);
+  if(!pendingRequest||pendingRequest.payload!==payload) pendingRequest={payload,key:crypto.randomUUID()};
+  try { await api('/orders',{method:'POST',headers:{'Idempotency-Key':pendingRequest.key},body:payload});pendingRequest=null;await refresh();view('activity'); }
+  catch(error){showError(error);} finally{$('submit-order').disabled=false;}
+};
+for(const nav of document.querySelectorAll('.nav')) nav.onclick=()=>view(nav.dataset.view);
+$('open-analysis').onclick=()=>view('analysis');
+$('refresh').onclick=()=>refresh().catch(showError);
+$('login').onclick=()=>login().catch(showError);
+$('logout').onclick=()=>{sessionStorage.removeItem('baglo_token');if(config?.auth_domain){const url=new URL(config.auth_domain+'/logout');url.search=new URLSearchParams({client_id:config.client_id,logout_uri:location.origin+'/'});location.assign(url);}else location.assign('/');};
+(async()=>{
+  try {
+    const settingsResponse=await fetch('/config.json');
+    if(!settingsResponse.ok) throw new Error('無法讀取網站設定');
+    const settings=await settingsResponse.json();
+    apiBase=(settings.api_base||'').replace(/\/$/,'');
+    config=await api('/config');
+    $('mode').textContent=config.demo?'本機沙盒 · 示範成交':config.environment==='local'?'本機模擬':'PAPER / '+config.environment.toUpperCase();
+    $('notice').textContent=config.demo?'本機沙盒：可用「沙盒成交」驗證帳務。價格來自你輸入的限價，不是真實行情，績效不可用於評估策略。':'純模擬交易：委託暫保持待成交，行情與 AI 接入完成前不自動撮合。';
+    for(const item of config.symbols){ const option=document.createElement('option');option.value=item.symbol;option.textContent=item.symbol+' '+item.name;$('symbol').append(option); }
+    await finishLogin();
+    const authenticated=config.environment==='local'||!!sessionStorage.getItem('baglo_token');
+    $('login').hidden=authenticated;$('logout').hidden=!sessionStorage.getItem('baglo_token');
+    if(authenticated) await refresh();
+    else { $('notice').textContent='請先登入，開啟你的獨立模擬帳戶。';$('submit-order').disabled=true; }
+  } catch(error){showError(error);$('notice').textContent='尚未連接帳戶，請確認服務或重新登入。';$('submit-order').disabled=true;if(config?.environment!=='local')$('login').hidden=false;}
+})();
