@@ -1,0 +1,31 @@
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+.aws/
+*.pem
+*.key
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+# Frontend
+node_modules/
+.next/
+out/
+dist/
+# Build artifacts and local state
+.aws-sam/
+cdk.out/
+*.zip
+*.bundle
+data/
+*.db
+*.sqlite*
+# OS and editor
+.DS_Store
+.idea/
