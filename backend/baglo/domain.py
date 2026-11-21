@@ -1,6 +1,6 @@
 """Deterministic paper ledger. Money is integer TWD cents; shares are integers."""
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 import hashlib
 import json
@@ -30,7 +30,16 @@ def integer(value, field, minimum=1, maximum=100_000):
         raise DomainError(f'{field} 必須是 {minimum}～{maximum} 的整數')
     return value
 
-def place_order(state, body, key):
+def stock_price_ticks(on_date=None):
+    current = on_date or datetime.now(timezone(timedelta(hours=8))).date()
+    top_tick = 100 if current.isoformat() >= '2027-07-05' else 500
+    return [{'below': threshold, 'tick': tick} for threshold, tick in
+            [(1000, 1), (5000, 5), (10000, 10), (50000, 50), (100000, 100), (None, top_tick)]]
+
+def stock_price_tick(price, on_date=None):
+    return next(b['tick'] for b in stock_price_ticks(on_date) if b['below'] is None or price < b['below'])
+
+def place_order(state, body, key, instrument=None):
     if not isinstance(key, str) or not 8 <= len(key) <= 100:
         raise DomainError('缺少有效的 Idempotency-Key')
     required = {'symbol', 'side', 'quantity', 'limit_price'}
@@ -45,7 +54,8 @@ def place_order(state, body, key):
     if len(state['orders']) >= MAX_ORDERS:
         raise DomainError('本版帳戶已達 150 筆紀錄上限，請匯出並升級儲存格式', 409)
     symbol, side = body['symbol'], body['side']
-    if symbol not in UNIVERSE or side not in ('buy', 'sell'):
+    known = symbol in UNIVERSE or (isinstance(instrument, dict) and instrument.get('symbol') == symbol and instrument.get('instrument_type') == 'common_stock' and instrument.get('trading_unit') == 1000)
+    if not known or side not in ('buy', 'sell'):
         raise DomainError('不支援的股票或交易方向')
     quantity = integer(body['quantity'], '股數', maximum=499_000)
     # API quantities always represent shares, including board-lot orders.
@@ -58,6 +68,9 @@ def place_order(state, body, key):
     if market_type == 'board_lot' and (quantity < 1000 or quantity % 1000):
         raise DomainError('整股委託須為 1,000 股的整數倍（1 張 = 1,000 股）')
     price = integer(body['limit_price'], '限價（分）', maximum=10_000_000)
+    tick = stock_price_tick(price)
+    if price % tick:
+        raise DomainError(f'此價位升降單位為 NT${tick/100:g}，請使用有效限價')
     value = quantity * price
     fee = max(2000, int((Decimal(value) * Decimal('0.001425')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)))
     pending = [o for o in state['orders'] if o['status'] == 'pending']
@@ -72,7 +85,7 @@ def place_order(state, body, key):
         if quantity > state['positions'].get(symbol, 0) - reserved:
             raise DomainError('可賣股數不足；本版不支援放空')
     order = {'id': key, 'fingerprint': digest, 'symbol': symbol, 'side': side,
-             'quantity': quantity, 'market_type': market_type, 'limit_price': price, 'reserved': value + fee if side == 'buy' else 0,
+             'quantity': quantity, 'name': (instrument or {}).get('name', UNIVERSE.get(symbol, symbol)), 'market_type': market_type, 'limit_price': price, 'reserved': value + fee if side == 'buy' else 0,
              'status': 'pending', 'created_at': now(), 'source': 'manual'}
     result = deepcopy(state)
     result['orders'].append(order)

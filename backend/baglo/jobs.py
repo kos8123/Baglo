@@ -11,7 +11,7 @@ def handler(event, context):
         return {'status': 'skipped', 'reason': 'weekend'}
     # Exact holiday calendar and point-in-time data adapters remain a prerequisite.
     report = {'date': current.date().isoformat(), 'status': 'blocked', 'orders_created': 0,
-              'reason': 'Trading calendar, fundamental/ownership data and AI provider not configured',
+              'reason': 'Premarket orchestration, trading calendar and AI provider not enabled; data adapters are available on demand',
               'created_at': current.isoformat()}
     key = 'premarket/' + current.date().isoformat() + '.json'
     s3 = boto3.client('s3')

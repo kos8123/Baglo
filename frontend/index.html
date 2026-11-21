@@ -34,14 +34,22 @@
         <div class="card-top"><span class="eyebrow">QUICK TRADE</span><span class="panel-icon" aria-hidden="true">↗</span></div>
         <h2>模擬委託</h2><p class="panel-description">先下判斷，再留下紀錄。</p>
         <form id="order-form">
-          <label>交易標的<select id="symbol" required></select></label>
+          <div class="instrument-picker" id="instrument-picker">
+            <label for="stock-search">搜尋股票代號或名稱</label>
+            <div class="stock-search-box"><span aria-hidden="true">⌕</span><input id="stock-search" type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="search-results" autocomplete="off" placeholder="例如 2330、台積電"><button type="button" id="reset-search" aria-label="清除搜尋與價格條件">×</button></div>
+            <div class="price-filters"><label>最低股價<input id="min-price" aria-label="最低股價" type="number" min="0" step="0.01" placeholder="不限"></label><span>—</span><label>最高股價<input id="max-price" aria-label="最高股價" type="number" min="0" step="0.01" placeholder="不限"></label></div>
+            <div id="search-status" class="search-status" role="status">可搜尋上市櫃普通股，並依最近收盤價篩選。</div>
+            <div id="search-results" class="search-results" role="listbox" aria-label="股票搜尋結果" hidden></div>
+          </div><select id="symbol" aria-label="已選股票" hidden></select>
+          <div class="selected-instrument"><strong id="selected-name">2330 台積電</strong><span id="selected-exchange">上市</span></div>
           <div class="lot-switch" role="group" aria-label="交易類別">
             <button type="button" id="board-lot" aria-pressed="false">整股 <span>張</span></button>
             <button type="button" id="odd-lot" class="selected" aria-pressed="true">零股 <span>股</span></button>
           </div><input type="hidden" id="market-type" value="odd_lot">
           <div class="form-row"><label>交易方向<select id="side"><option value="buy">買入</option><option value="sell">賣出</option></select></label><label><span id="quantity-label">委託股數（股）</span><input id="quantity" aria-labelledby="quantity-label" aria-describedby="quantity-summary" type="number" min="1" max="999" step="1" value="10" required></label></div>
           <div id="quantity-summary" class="quantity-summary" aria-live="polite">10 股 · 零股委託</div>
-          <label>限價（新臺幣／股）<input id="price" type="number" min="0.01" max="100000" step="0.01" placeholder="輸入你的目標價格" required></label>
+          <div class="reference-quote"><div><span id="quote-label">參考價格</span><button type="button" id="refresh-quote" class="text-button">更新 ↻</button></div><strong id="quote-price">—</strong><p id="quote-meta" role="status">正在取得官方資料…</p></div>
+          <label for="price">限價（新臺幣／股）</label><div class="price-control"><button type="button" id="price-minus" aria-label="限價減少一檔">−</button><input id="price" aria-label="限價（新臺幣／股）" type="number" min="0.01" max="100000" step="0.01" placeholder="輸入你的目標價格" required><button type="button" id="price-plus" aria-label="限價增加一檔">＋</button></div><div class="price-assist"><span id="price-origin">選股後自動帶入可用報價</span><button type="button" id="use-quote" class="text-button" disabled>帶入參考價</button></div>
           <div class="order-type"><span class="mini-dot"></span> LIMIT ORDER <span>限價單</span></div>
           <dl class="order-estimate"><div><dt>預估委託金額</dt><dd id="estimated-gross">—</dd></div><div><dt>預估手續費</dt><dd id="estimated-fee">—</dd></div><div id="estimated-tax-row" hidden><dt>預估證交稅</dt><dd id="estimated-tax">—</dd></div><div class="estimate-total"><dt id="estimate-total-label">預估保留金額</dt><dd id="estimated-total">—</dd></div></dl>
           <div id="budget-note" class="budget-note" aria-live="polite"></div>
@@ -51,25 +59,28 @@
         <div class="order-foot"><span class="shield" aria-hidden="true">◇</span><span>虛擬資金<br><b>不連接真實券商</b></span></div>
       </article>
       <article class="card research">
-        <div class="card-top"><div class="instrument"><span class="instrument-symbol" id="chart-monogram" aria-hidden="true">台</span><div><h2 id="chart-symbol">2330 台積電</h2><span class="eyebrow">TAIWAN STOCK EXCHANGE</span></div></div><span class="pill muted">行情未接入</span></div>
-        <div class="chart-tools"><span class="chart-type">市場走勢 <span>↗</span></span><span class="chart-note"><span class="mini-dot"></span> 等待行情</span></div>
-        <div class="chart" role="img" aria-label="行情尚未接入，目前沒有價格走勢資料">
+        <div class="card-top"><div class="instrument"><span class="instrument-symbol" id="chart-monogram" aria-hidden="true">台</span><div><h2 id="chart-symbol">2330 台積電</h2><span class="eyebrow" id="instrument-exchange">TAIWAN STOCK EXCHANGE</span></div></div><span id="chart-source" class="pill muted">資料載入中</span></div>
+        <div class="chart-tools"><span class="chart-type">市場走勢 <span>↗</span></span><span id="chart-status" class="chart-note">正在載入歷史資料</span></div>
+        <div class="chart" role="img" aria-label="正在取得官方歷史收盤價資料">
+          <svg id="price-chart" class="price-chart" viewBox="0 0 800 300" role="img" aria-label="官方歷史收盤價走勢" hidden></svg><div id="chart-values" class="chart-values" hidden></div>
           <div class="chart-grid" aria-hidden="true"></div><div class="chart-brand" aria-hidden="true">BAGLO</div>
-          <div class="chart-empty"><span class="chart-empty-icon" aria-hidden="true">⌁</span><strong>每一條線，都要有來源。</strong><p>行情接入後，在這裡看見市場。<br>目前不顯示示範走勢或推估價格。</p><span class="waiting-tag">WAITING FOR MARKET DATA</span></div>
-          <div class="chart-axis" aria-hidden="true"><span>09:00</span><span>10:00</span><span>11:00</span><span>12:00</span><span>13:30</span></div>
+          <div class="chart-empty" id="chart-empty"><span class="chart-empty-icon" aria-hidden="true">⌁</span><strong>正在取得官方日線…</strong><p>資料載入完成後顯示實際收盤價走勢。<br>沒有資料時不繪製推估線。</p><span class="waiting-tag">WAITING FOR MARKET DATA</span></div>
+          <div id="chart-axis" class="chart-axis" aria-hidden="true"><span>09:00</span><span>10:00</span><span>11:00</span><span>12:00</span><span>13:30</span></div>
         </div>
         <div class="research-bottom"><div><span class="eyebrow">BEFORE THE OPEN</span><h3>三個面向，一個更完整的判斷。</h3></div><button class="text-button" id="open-analysis">盤前研究 ↗</button></div>
-        <div class="research-facets"><span><i>01</i> 技術面 <b>待接入</b></span><span><i>02</i> 基本面 <b>待接入</b></span><span><i>03</i> 籌碼面 <b>待接入</b></span></div>
+        <div class="research-facets"><span><i>01</i> SMA20 <b id="facet-technical">載入中</b></span><span><i>02</i> 營收年增率 <b id="facet-fundamental">載入中</b></span><span><i>03</i> 法人買賣超 <b id="facet-ownership">載入中</b></span></div>
       </article>
       <aside class="market-side">
         <article class="card positions"><div class="card-top"><h2>我的持倉</h2><span class="eyebrow">PORTFOLIO</span></div><div id="positions" class="empty">尚無持倉。先建立一筆模擬委託。</div></article>
-        <article class="card watch-card"><div class="card-top"><h2>標的清單</h2><span class="panel-icon" aria-hidden="true">↗</span></div><p class="panel-description">點選標的，開始建立委託。</p><div id="watchlist" class="watchlist"></div><div class="watch-foot">價格資料尚未接入 <span>—</span></div></article>
+        <article class="card watch-card"><div class="card-top"><h2>標的清單</h2><span class="panel-icon" aria-hidden="true">↗</span></div><p class="panel-description">點選標的，開始建立委託。</p><div id="watchlist" class="watchlist"></div><div class="watch-foot">價格以選股後的來源與時間為準 <span>↗</span></div></article>
         <div class="paper-note"><span class="paper-note-icon">↗</span><div><strong>Build conviction.<br>Not just a position.</strong><p>先驗證想法，再談報酬。</p></div></div>
       </aside>
     </div>
   </section>
-  <section id="analysis" class="view" hidden><article class="card analysis-card"><div class="card-top"><span class="eyebrow">PREMARKET RESEARCH</span><span class="pill muted">資料接入中</span></div><h2>讓每個建議，<br>都有據可循<span class="lime-text">。</span></h2><p class="muted-text">盤前三面分析與 OpenAI 尚在接入階段。以下呈現資料就緒狀態，不是投資評分。</p><div class="analysis-grid"><article><span>01 / TECHNICAL</span><h3>技術面</h3><p>均線・動能・量價・波動</p><b>尚未接入 ↗</b></article><article><span>02 / FUNDAMENTAL</span><h3>基本面</h3><p>月營收・財報・估值</p><b>尚未接入 ↗</b></article><article><span>03 / OWNERSHIP</span><h3>籌碼面</h3><p>法人・融資券・資金流向</p><b>尚未接入 ↗</b></article></div><div class="notice">AI 推薦與自動交易暫未開放；目前不會呼叫付費模型或產生交易訊號。</div></article></section>
-  <section id="activity" class="view" hidden><article class="card activity-card"><div class="card-top"><div><span class="eyebrow">YOUR DECISIONS, ON RECORD</span><h2>每筆委託，都有紀錄。</h2></div><button id="refresh" class="button secondary">重新整理 ↻</button></div><div class="table-wrap"><table><thead><tr><th>標的</th><th>方向</th><th>類別</th><th>委託數量</th><th>限價</th><th>狀態</th><th>操作</th></tr></thead><tbody id="orders"></tbody></table></div><p id="no-orders" class="empty">還沒有委託，從一個想法開始。</p><p class="form-hint">部署版暫不自動撮合。本機沙盒成交使用委託限價，非真實市場價格；不模擬委託簿、滑價與交割。每筆手續費最低 NT$20，賣出另計 0.3% 股票交易稅。示範帳本最多 150 筆委託。</p></article></section>
+  <section id="analysis" class="view" hidden><article class="card analysis-card"><div class="card-top"><span class="eyebrow">PREMARKET RESEARCH</span><span class="pill muted" id="analysis-symbol">2330 台積電</span></div><h2>每個判斷，<br>都有資料可查<span class="lime-text">。</span></h2><p class="muted-text">官方盤後資料，不代表盤中即時訊號。AI 建議與自動交易尚未啟用。</p><div class="analysis-grid"><article><span>01 / TECHNICAL</span><h3>技術面</h3><div id="technical-detail" class="research-detail">正在載入官方日線…</div></article><article><span>02 / FUNDAMENTAL</span><h3>基本面</h3><div id="fundamental-detail" class="research-detail">正在取得營收與估值資料…</div></article><article><span>03 / OWNERSHIP</span><h3>籌碼面</h3><div id="ownership-detail" class="research-detail">正在取得三大法人資料…</div></article></div><div class="notice">基本面目前提供月營收成長與估值，尚非完整財報分析。未還原日線可能受除權息影響；各資料區塊分別標示日期，請勿把不同日期資料當成同時發布。</div></article></section>
+  <section id="activity" class="view" hidden><article class="card activity-card"><div class="card-top"><div><span class="eyebrow">YOUR DECISIONS, ON RECORD</span><h2>每筆委託，都有紀錄。</h2></div><button id="refresh" class="button secondary">重新整理 ↻</button></div><div class="table-wrap"><table><thead><tr><th>標的</th><th>方向</th><th>類別</th><th>委託數量</th><th>限價</th><th>狀態</th><th>操作</th></tr></thead><tbody id="orders"></tbody></table></div><p id="no-orders" class="empty">還沒有委託，從一個想法開始。</p><p class="form-hint">部署版暫不自動撮合。本機沙盒成交以委託限價示範，未依實際買賣盤撮合；不模擬委託簿、滑價與交割。每筆手續費最低 NT$20，賣出另計 0.3% 股票交易稅。示範帳本最多 150 筆委託。</p></article></section>
+  <dialog id="order-review" class="order-review" aria-labelledby="review-title"><form method="dialog"><button class="review-close" value="cancel" aria-label="關閉確認視窗">×</button><span class="eyebrow">REVIEW YOUR PAPER ORDER</span><h2 id="review-title">確認這筆模擬委託</h2><div id="review-summary"></div><p>限價由你決定；參考報價不等於保證成交價。</p><div class="review-actions"><button value="cancel" class="button secondary">返回調整</button><button id="confirm-order" value="confirm" class="button primary">確認建立</button></div></form></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
   <footer><span>BAGLO® <b>A LITTLE LESS GUESSWORK.</b></span><span>純模擬交易 · 所有金額皆為虛擬資金</span></footer>
 </main>
 </body></html>

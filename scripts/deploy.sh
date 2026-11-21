@@ -10,7 +10,7 @@ sam build --template-file infra/template.yaml
 sam deploy --stack-name "$STACK" --region "$AWS_REGION" \
   --s3-bucket "$BAGLO_ARTIFACT_BUCKET" --capabilities CAPABILITY_IAM \
   --role-arn "$BAGLO_CFN_ROLE_ARN" \
-  --parameter-overrides "Environment=$ENVIRONMENT" PremarketScheduleState=DISABLED \
+  --parameter-overrides "Environment=$ENVIRONMENT" PremarketScheduleState=DISABLED "FugleSecretArn=${BAGLO_FUGLE_SECRET_ARN:-}" \
   --no-confirm-changeset --no-fail-on-empty-changeset
 OUTPUT_FILE=$(mktemp)
 trap 'rm -f "$OUTPUT_FILE"' EXIT

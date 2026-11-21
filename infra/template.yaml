@@ -9,6 +9,12 @@ Parameters:
     Type: String
     Default: DISABLED
     AllowedValues: [ENABLED, DISABLED]
+  FugleSecretArn:
+    Type: String
+    Default: ''
+    Description: Optional existing Secrets Manager secret ARN; never the API key itself
+Conditions:
+  HasFugleSecret: !Not [!Equals [!Ref FugleSecretArn, '']]
 Resources:
   Ledger:
     Type: AWS::DynamoDB::Table
@@ -179,6 +185,15 @@ Resources:
                 Action: [dynamodb:GetItem, dynamodb:PutItem]
                 Resource: !GetAtt Ledger.Arn
               - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: !Sub '${ResearchBucket.Arn}/market/*'
+              - !If
+                - HasFugleSecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref FugleSecretArn
+                - !Ref AWS::NoValue
+              - Effect: Allow
                 Action: [logs:CreateLogStream, logs:PutLogEvents]
                 Resource: !GetAtt ApiLog.Arn
   ApiLog:
@@ -194,12 +209,14 @@ Resources:
       Handler: baglo.api.handler
       Runtime: python3.12
       Architectures: [arm64]
-      MemorySize: 256
-      Timeout: 10
+      MemorySize: 512
+      Timeout: 25
       Role: !GetAtt ApiRole.Arn
       Environment:
         Variables:
           BAGLO_TABLE: !Ref Ledger
+          BAGLO_DATA_BUCKET: !Ref ResearchBucket
+          BAGLO_FUGLE_SECRET_ARN: !Ref FugleSecretArn
           BAGLO_ENV: !Ref Environment
           BAGLO_DEMO: '0'
           BAGLO_CLIENT_ID: !Ref Client
@@ -278,7 +295,7 @@ Resources:
   PremarketSchedule:
     Type: AWS::Scheduler::Schedule
     Properties:
-      Description: Premarket readiness audit only; analysis adapters not implemented
+      Description: Premarket readiness audit only; daily orchestration and AI remain disabled
       ScheduleExpression: 'cron(10 8 ? * MON-FRI *)'
       ScheduleExpressionTimezone: Asia/Taipei
       State: !Ref PremarketScheduleState

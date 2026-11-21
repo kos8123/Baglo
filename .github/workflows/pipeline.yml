@@ -37,6 +37,7 @@ jobs:
       id-token: write
     env:
       AWS_REGION: us-east-1
+      BAGLO_FUGLE_SECRET_ARN: ${{ github.ref == 'refs/heads/main' && vars.BAGLO_PROD_FUGLE_SECRET_ARN || vars.BAGLO_DEV_FUGLE_SECRET_ARN }}
       BAGLO_ARTIFACT_BUCKET: ${{ github.ref == 'refs/heads/main' && vars.BAGLO_PROD_ARTIFACT_BUCKET || vars.BAGLO_DEV_ARTIFACT_BUCKET }}
       BAGLO_CFN_ROLE_ARN: ${{ github.ref == 'refs/heads/main' && vars.BAGLO_PROD_CFN_ROLE_ARN || vars.BAGLO_DEV_CFN_ROLE_ARN }}
     steps:
