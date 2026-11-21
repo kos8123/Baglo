@@ -69,7 +69,12 @@ def handler(event, context):
             params = event.get('queryStringParameters') or {}
             return response(200, get_markets().quote(parts[2], params.get('market_type', 'odd_lot')))
         if method == 'GET' and len(parts) == 3 and parts[:2] == ['api', 'history']:
-            return response(200, get_markets().history(parts[2]))
+            params = event.get('queryStringParameters') or {}
+            try:
+                months, offset = int(params.get('months', 4)), int(params.get('offset', 0))
+            except (TypeError, ValueError):
+                raise DomainError('歷史月份範圍必須是整數')
+            return response(200, get_markets().history(parts[2], months=months, offset_months=offset))
         if method == 'GET' and len(parts) == 3 and parts[:2] == ['api', 'research']:
             service = get_markets()
             return response(200, {'symbol': parts[2], 'fundamentals': service.fundamentals(parts[2]), 'ownership': service.ownership(parts[2])})

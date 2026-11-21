@@ -14,7 +14,7 @@ def build(output, api_base=''):
             raise ValueError('Cloud API URL must be HTTPS without credentials/query/fragment')
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
-    for name in ['index.html', 'app.js', 'styles.css']:
+    for name in ['index.html', 'app.js', 'chart-data.js', 'styles.css']:
         shutil.copyfile(ROOT/'frontend'/name, output/name)
     (output/'config.json').write_text(json.dumps({'api_base': api_base.rstrip('/')})+'\n')
 

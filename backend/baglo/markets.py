@@ -326,11 +326,13 @@ class MarketService:
             fallback['reason'] = '即時來源暫時不可用；使用最近收盤參考價，並非即時報價'
             return {'instrument': instrument, 'quote': fallback}
 
-    def history(self, symbol):
+    def history(self, symbol, months=4, offset_months=0):
+        if type(months) is not int or not 1 <= months <= 6 or type(offset_months) is not int or not 0 <= offset_months <= 114:
+            raise DomainError("歷史範圍需為 1～6 個月，起點限最近 120 個月")
         instrument = self.resolve(symbol)
         current = self.clock().astimezone(TZ).date()
         bars, warnings = {}, []
-        for offset in range(4):
+        for offset in range(offset_months, offset_months+months):
             month_index = current.year*12 + current.month-1-offset
             year, month = divmod(month_index, 12)
             stamp = f'{year:04}{month+1:02}01'
@@ -379,7 +381,7 @@ class MarketService:
                     warnings.append(stamp+' 使用快取')
             except (DataUnavailable, KeyError, ValueError, IndexError):
                 warnings.append(stamp+' 暫無資料')
-            if offset < 3:
+            if offset < offset_months+months-1:
                 time.sleep(0.25)
         ordered = sorted(bars.values(), key=lambda b: b['date'])
         def sma(count):

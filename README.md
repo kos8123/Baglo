@@ -59,7 +59,7 @@ python scripts/build_frontend.py
 | GET | `/api/analysis` | AI 分析尚未設定，不產生虛構建議 |
 | GET | `/api/instruments?q=2330&min_price=30&max_price=100` | 代號／名稱與價格搜尋；價格篩選以元為單位 |
 | GET | `/api/market/{symbol}?market_type=odd_lot` | 富果報價或明確標示的官方收盤參考 |
-| GET | `/api/history/{symbol}` | 約四個月份的未還原官方日線與均線 |
+| GET | `/api/history/{symbol}` | 分頁查詢未還原官方日線與均線（months 1～6、offset 0～114） |
 | GET | `/api/research/{symbol}` | 月營收成長、估值與法人買賣超 |
 
 雲端由 API Gateway 驗證 Cognito access token 與 `baglo-api/access` scope。Lambda 以已驗證的 `sub` 隔離帳戶，不接受前端傳入帳戶 ID。前端使用 Authorization Code + PKCE，access token 只保留在分頁的 sessionStorage，不把金鑰放入網站。
@@ -191,7 +191,9 @@ aws cloudformation describe-stacks --region us-east-1 \
 
 ### 交易工作台更新
 
-日 K 線依真實 OHLC 繪製，紅漲綠跌；提供十字游標、開高低收與成交量、滾輪縮放、拖曳、放大縮小與重設。歷史範圍仍為已取得的最近四個月，不含還原權息。
+日 K 線依真實 OHLC 繪製，紅漲綠跌；提供十字游標、開高低收與成交量、滾輪縮放、拖曳、放大縮小與重設。歷史資料先載入半年，再逐批擴充至近三年；可手動載入更多，最多最近十年，實際以來源可用資料為準，不含還原權息。
+
+日 K、週 K、月 K 可切換；週線以週一為界，月線以曆月為界。各棒取首日開盤、最高、最低、末日收盤與成交量加總；最近週／月尚未結束時為截至最新交易日的部分期間，來源缺漏不補造資料。十字線吸附選定 K 棒的日期與收盤價；預設顯示 120 根日線、104 根週線或 60 根月線（資料不足時顯示實有根數），保留縮放和拖曳。
 
 買進／賣出按鈕分開，送出前需確認方向、數量、價格與費用，完成後可點通知前往委託紀錄。取消原本單筆本金 20% 的金額限制；保留資金、持倉、升降單位及交易股數規則。
 

@@ -242,3 +242,18 @@ def test_limits_uses_provider_values_and_blocks_missing_or_prior_day(service, mo
     assert service.price_limits('2330')['status']=='unavailable'
     with pytest.raises(DomainError,match='漲跌停'):
         service.order_instrument('2330')
+
+
+def test_history_pagination_bounds_and_month_offsets(service,monkeypatch):
+    seen=[]
+    def fetch(url,headers=None):
+        seen.append(url)
+        return {'stat':'OK','fields':['日期','開盤價','最高價','最低價','收盤價','成交股數'],'data':[['115/01/02','10','11','9','10','100']]}
+    service.fetcher=fetch
+    monkeypatch.setattr('baglo.markets.time.sleep',lambda _:None)
+    service.registry={'2330':{'symbol':'2330','exchange':'TWSE'}}
+    service.index_until=float('inf')
+    service.history('2330',months=2,offset_months=6)
+    assert 'date=20260501' in seen[0] and 'date=20260401' in seen[1]
+    for months,offset in [(7,0),(0,0),(2,-1),(6,115)]:
+        with pytest.raises(DomainError):service.history('2330',months=months,offset_months=offset)
