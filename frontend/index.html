@@ -1,15 +1,68 @@
 <!doctype html>
-<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f5f6f2"><title>Baglo · 把直覺，交給驗證。</title><link rel="stylesheet" href="/styles.css"><script src="/app.js" defer></script></head>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#292a28"><title>Baglo · Trading, with evidence.</title>
+  <link rel="stylesheet" href="/styles.css"><script src="/app.js" defer></script>
+</head>
 <body>
-<aside class="sidebar"><a class="brand" href="/" aria-label="Baglo 首頁"><span class="logo">b.</span>baglo<span class="brand-dot">®</span></a><div class="workspace">YOUR PAPER LAB <span>01</span></div><nav><button class="nav active" data-view="overview">◫ <span>交易工作台</span><small>01</small></button><button class="nav" data-view="analysis">◈ <span>盤前研究室</span><small>02</small></button><button class="nav" data-view="activity">≋ <span>委託紀錄</span><small>03</small></button></nav><div class="sidebar-foot"><span class="pulse"></span> 只有模擬，沒有真金白銀。<p>研究判斷，記錄每一次決定。</p></div></aside>
-<main><header><div><span class="eyebrow">YOUR EDGE STARTS WITH EVIDENCE</span><h1>把直覺，交給驗證<span>。</span></h1><p class="subtitle">先看懂市場，再決定下一步。這裡的每筆交易，都是練習。</p></div><div class="header-actions"><span id="mode" class="pill">連線中</span><button id="login" class="button secondary" hidden>登入帳戶 ↗</button><button id="logout" class="text-button" hidden>登出</button></div></header>
-<div id="notice" class="notice" role="status">正在連接 Baglo…</div><div id="error" class="error" role="alert" hidden></div>
-<section id="overview" class="view">
-<div class="stats"><article class="stat"><span>模擬現金餘額</span><strong id="cash">—</strong><small>TWD · 初始虛擬本金 300,000</small></article><article class="stat"><span>可用資金</span><strong id="available">—</strong><small>已扣除待成交買單的保留金額</small></article><article class="stat"><span>持有標的</span><strong id="holdings">—</strong><small>無最新行情時，不推估持倉市值</small></article><article class="stat accent"><span>AI 自動交易</span><strong>尚未啟用 <i>↗</i></strong><small>完成資料接入與決策驗證後開放</small></article></div>
-<div class="grid"><article class="card research"><div class="card-top"><span class="eyebrow">DAILY BRIEF / 每日研究</span><span class="pill muted">等待資料接入</span></div><h2>市場的聲音很多。<br>先把依據放在桌上。</h2><p>從技術、基本與籌碼三個角度整理訊號。<br>資料未到齊前，AI 不會替你編一個答案。</p><div class="research-facets"><span>01 技術面 <b>—</b></span><span>02 基本面 <b>—</b></span><span>03 籌碼面 <b>—</b></span></div><button class="text-button" id="open-analysis">前往盤前研究室 →</button><div class="abstract" aria-hidden="true"><div></div><div></div><div></div><div></div><div></div></div></article>
-<article class="card order-card"><div class="card-top"><span class="eyebrow">PAPER ORDER</span><span class="dot-label">手動模擬</span></div><h2>下一筆，由你決定。</h2><form id="order-form"><label>交易標的<select id="symbol" required></select></label><div class="form-row"><label>交易方向<select id="side"><option value="buy">買入</option><option value="sell">賣出</option></select></label><label>股數<input id="quantity" type="number" min="1" max="100000" step="1" value="10" required></label></div><label>限價（新臺幣／股）<input id="price" type="number" min="0.01" max="100000" step="0.01" placeholder="請輸入限價" required></label><div class="form-hint">單筆買入上限 NT$60,000；股數以整數股模擬。限價不是成交承諾。</div><button class="button primary" id="submit-order" type="submit">建立模擬委託 <span>↗</span></button></form></article></div>
-<article class="card positions"><div class="card-top"><h2>目前持倉</h2><span class="eyebrow">POSITIONS</span></div><div id="positions" class="empty">尚無持倉。先建立一筆模擬委託。</div></article>
-</section>
-<section id="analysis" class="view" hidden><article class="card"><span class="eyebrow">PREMARKET RESEARCH</span><h2>每個建議，都該有來源。</h2><p class="muted-text">盤前三面分析與 OpenAI 尚在接入階段。以下是資料就緒狀態，不是投資評分。</p><div class="analysis-grid"><article><span>01</span><h3>技術面</h3><p>均線・動能・量價・波動</p><b>尚未接入</b></article><article><span>02</span><h3>基本面</h3><p>月營收・財報・估值</p><b>尚未接入</b></article><article><span>03</span><h3>籌碼面</h3><p>法人・融資券・資金流向</p><b>尚未接入</b></article></div><div class="notice">AI 推薦與自動交易暫未開放；目前不會呼叫付費模型或產生交易訊號。</div></article></section>
-<section id="activity" class="view" hidden><article class="card"><div class="card-top"><div><span class="eyebrow">YOUR DECISIONS, ON RECORD</span><h2>委託紀錄</h2></div><button id="refresh" class="button secondary">重新整理 ↻</button></div><div class="table-wrap"><table><thead><tr><th>標的</th><th>方向</th><th>股數</th><th>限價</th><th>狀態</th><th>操作</th></tr></thead><tbody id="orders"></tbody></table></div><p id="no-orders" class="empty">還沒有委託，從一個想法開始。</p><p class="form-hint">部署版暫不自動撮合。本機沙盒成交使用委託限價，非真實市場價格；不模擬委託簿、滑價與交割。每筆手續費最低 NT$20，賣出另計 0.3% 股票交易稅。示範帳本最多 150 筆委託。</p></article></section>
-<footer><span>BAGLO / A LITTLE LESS GUESSWORK.</span><span>所有金額皆為虛擬資金 · 本版不連接券商</span></footer></main></body></html>
+<aside class="sidebar">
+  <a class="brand" href="/" aria-label="Baglo 首頁"><span class="logo">b.</span>Baglo<span class="brand-dot">®</span></a>
+  <nav aria-label="主要功能">
+    <button class="nav active" data-view="overview"><span>交易工作台</span><small>Trading</small></button>
+    <button class="nav" data-view="analysis"><span>盤前研究室</span><small>Research</small></button>
+    <button class="nav" data-view="activity"><span>委託紀錄</span><small>Activity</small></button>
+  </nav>
+  <div class="workspace"><span class="pulse"></span> PAPER ACCOUNT <span class="workspace-badge">TW</span></div>
+</aside>
+<main>
+  <header>
+    <div class="heading-group"><span class="eyebrow">TAIWAN STOCKS / YOUR PERSONAL TRADING LAB</span><h1>交易，先有依據<span>。</span></h1><p class="subtitle">你的判斷。你的策略。用模擬交易驗證。</p></div>
+    <div class="header-actions"><span id="mode" class="pill">連線中</span><button id="login" class="button secondary" hidden>登入帳戶 ↗</button><button id="logout" class="text-button" hidden>登出</button><span class="account-avatar" aria-hidden="true">B</span></div>
+  </header>
+  <div id="notice" class="notice" role="status">正在連接 Baglo…</div>
+  <div id="error" class="error" role="alert" hidden></div>
+  <section id="overview" class="view">
+    <div class="stats">
+      <article class="stat"><span>模擬現金餘額 <small>CASH BALANCE</small></span><strong id="cash">—</strong><small>TWD · 初始虛擬本金 300,000</small></article>
+      <article class="stat"><span>可用資金 <small>BUYING POWER</small></span><strong id="available">—</strong><small>扣除待成交買單保留金額</small></article>
+      <article class="stat"><span>持有標的 <small>POSITIONS</small></span><strong id="holdings">—</strong><small>無行情時，不推估持倉市值</small></article>
+      <article class="stat accent"><span>AI 自動交易 <small>AUTOPILOT</small></span><strong>尚未啟用 <i>↗</i></strong><small>資料與決策驗證完成後開放</small></article>
+    </div>
+    <div class="grid">
+      <article class="card order-card">
+        <div class="card-top"><span class="eyebrow">QUICK TRADE</span><span class="panel-icon" aria-hidden="true">↗</span></div>
+        <h2>模擬委託</h2><p class="panel-description">先下判斷，再留下紀錄。</p>
+        <form id="order-form">
+          <label>交易標的<select id="symbol" required></select></label>
+          <div class="form-row"><label>交易方向<select id="side"><option value="buy">買入</option><option value="sell">賣出</option></select></label><label>股數<input id="quantity" type="number" min="1" max="100000" step="1" value="10" required></label></div>
+          <label>限價（新臺幣／股）<input id="price" type="number" min="0.01" max="100000" step="0.01" placeholder="輸入你的目標價格" required></label>
+          <div class="order-type"><span class="mini-dot"></span> LIMIT ORDER <span>限價單</span></div>
+          <button class="button primary" id="submit-order" type="submit">建立模擬委託 <span>↗</span></button>
+          <div class="form-hint">單筆買入上限 NT$60,000；整數股模擬。限價不代表保證成交。</div>
+        </form>
+        <div class="order-foot"><span class="shield" aria-hidden="true">◇</span><span>虛擬資金<br><b>不連接真實券商</b></span></div>
+      </article>
+      <article class="card research">
+        <div class="card-top"><div class="instrument"><span class="instrument-symbol" id="chart-monogram" aria-hidden="true">台</span><div><h2 id="chart-symbol">2330 台積電</h2><span class="eyebrow">TAIWAN STOCK EXCHANGE</span></div></div><span class="pill muted">行情未接入</span></div>
+        <div class="chart-tools"><span class="chart-type">市場走勢 <span>↗</span></span><span class="chart-note"><span class="mini-dot"></span> 等待行情</span></div>
+        <div class="chart" role="img" aria-label="行情尚未接入，目前沒有價格走勢資料">
+          <div class="chart-grid" aria-hidden="true"></div><div class="chart-brand" aria-hidden="true">BAGLO</div>
+          <div class="chart-empty"><span class="chart-empty-icon" aria-hidden="true">⌁</span><strong>每一條線，都要有來源。</strong><p>行情接入後，在這裡看見市場。<br>目前不顯示示範走勢或推估價格。</p><span class="waiting-tag">WAITING FOR MARKET DATA</span></div>
+          <div class="chart-axis" aria-hidden="true"><span>09:00</span><span>10:00</span><span>11:00</span><span>12:00</span><span>13:30</span></div>
+        </div>
+        <div class="research-bottom"><div><span class="eyebrow">BEFORE THE OPEN</span><h3>三個面向，一個更完整的判斷。</h3></div><button class="text-button" id="open-analysis">盤前研究 ↗</button></div>
+        <div class="research-facets"><span><i>01</i> 技術面 <b>待接入</b></span><span><i>02</i> 基本面 <b>待接入</b></span><span><i>03</i> 籌碼面 <b>待接入</b></span></div>
+      </article>
+      <aside class="market-side">
+        <article class="card positions"><div class="card-top"><h2>我的持倉</h2><span class="eyebrow">PORTFOLIO</span></div><div id="positions" class="empty">尚無持倉。先建立一筆模擬委託。</div></article>
+        <article class="card watch-card"><div class="card-top"><h2>標的清單</h2><span class="panel-icon" aria-hidden="true">↗</span></div><p class="panel-description">點選標的，開始建立委託。</p><div id="watchlist" class="watchlist"></div><div class="watch-foot">價格資料尚未接入 <span>—</span></div></article>
+        <div class="paper-note"><span class="paper-note-icon">↗</span><div><strong>Build conviction.<br>Not just a position.</strong><p>先驗證想法，再談報酬。</p></div></div>
+      </aside>
+    </div>
+  </section>
+  <section id="analysis" class="view" hidden><article class="card analysis-card"><div class="card-top"><span class="eyebrow">PREMARKET RESEARCH</span><span class="pill muted">資料接入中</span></div><h2>讓每個建議，<br>都有據可循<span class="lime-text">。</span></h2><p class="muted-text">盤前三面分析與 OpenAI 尚在接入階段。以下呈現資料就緒狀態，不是投資評分。</p><div class="analysis-grid"><article><span>01 / TECHNICAL</span><h3>技術面</h3><p>均線・動能・量價・波動</p><b>尚未接入 ↗</b></article><article><span>02 / FUNDAMENTAL</span><h3>基本面</h3><p>月營收・財報・估值</p><b>尚未接入 ↗</b></article><article><span>03 / OWNERSHIP</span><h3>籌碼面</h3><p>法人・融資券・資金流向</p><b>尚未接入 ↗</b></article></div><div class="notice">AI 推薦與自動交易暫未開放；目前不會呼叫付費模型或產生交易訊號。</div></article></section>
+  <section id="activity" class="view" hidden><article class="card activity-card"><div class="card-top"><div><span class="eyebrow">YOUR DECISIONS, ON RECORD</span><h2>每筆委託，都有紀錄。</h2></div><button id="refresh" class="button secondary">重新整理 ↻</button></div><div class="table-wrap"><table><thead><tr><th>標的</th><th>方向</th><th>股數</th><th>限價</th><th>狀態</th><th>操作</th></tr></thead><tbody id="orders"></tbody></table></div><p id="no-orders" class="empty">還沒有委託，從一個想法開始。</p><p class="form-hint">部署版暫不自動撮合。本機沙盒成交使用委託限價，非真實市場價格；不模擬委託簿、滑價與交割。每筆手續費最低 NT$20，賣出另計 0.3% 股票交易稅。示範帳本最多 150 筆委託。</p></article></section>
+  <footer><span>BAGLO® <b>A LITTLE LESS GUESSWORK.</b></span><span>純模擬交易 · 所有金額皆為虛擬資金</span></footer>
+</main>
+</body></html>

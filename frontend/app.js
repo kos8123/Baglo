@@ -62,6 +62,26 @@ function render() {
     tr.append(actions);$('orders').append(tr);
   }
 }
+function selectInstrument(symbol) {
+  $('symbol').value=symbol;
+  const item=config.symbols.find(x=>x.symbol===symbol);
+  if(item) { $('chart-symbol').textContent=item.symbol+' '+item.name; $('chart-monogram').textContent=item.name.slice(0,1); }
+  for(const row of document.querySelectorAll('.watch-item')) { const selected=row.dataset.symbol===symbol;row.classList.toggle('selected',selected);row.setAttribute('aria-pressed',String(selected)); }
+}
+function renderWatchlist() {
+  $('watchlist').replaceChildren();
+  for(const item of config.symbols) {
+    const button=document.createElement('button');button.type='button';button.className='watch-item';button.dataset.symbol=item.symbol;
+    button.setAttribute('aria-label','選擇 '+item.symbol+' '+item.name);
+    const monogram=document.createElement('span');monogram.className='stock-monogram';monogram.textContent=item.name.slice(0,1);
+    const label=document.createElement('span');label.className='stock-label';label.textContent=item.name;
+    const code=document.createElement('small');code.textContent=item.symbol;label.append(code);
+    const arrow=document.createElement('span');arrow.className='watch-arrow';arrow.textContent='↗';arrow.setAttribute('aria-hidden','true');
+    button.append(monogram,label,arrow);button.onclick=()=>selectInstrument(item.symbol);$('watchlist').append(button);
+  }
+  selectInstrument($('symbol').value);
+}
+$('symbol').onchange=()=>selectInstrument($('symbol').value);
 async function refresh() { account=await api('/account'); render(); }
 $('order-form').onsubmit=async event=>{
   event.preventDefault();$('error').hidden=true;$('submit-order').disabled=true;
@@ -86,6 +106,7 @@ $('logout').onclick=()=>{sessionStorage.removeItem('baglo_token');if(config?.aut
     $('mode').textContent=config.demo?'本機沙盒 · 示範成交':config.environment==='local'?'本機模擬':'PAPER / '+config.environment.toUpperCase();
     $('notice').textContent=config.demo?'本機沙盒：可用「沙盒成交」驗證帳務。價格來自你輸入的限價，不是真實行情，績效不可用於評估策略。':'純模擬交易：委託暫保持待成交，行情與 AI 接入完成前不自動撮合。';
     for(const item of config.symbols){ const option=document.createElement('option');option.value=item.symbol;option.textContent=item.symbol+' '+item.name;$('symbol').append(option); }
+    renderWatchlist();
     await finishLogin();
     const authenticated=config.environment==='local'||!!sessionStorage.getItem('baglo_token');
     $('login').hidden=authenticated;$('logout').hidden=!sessionStorage.getItem('baglo_token');
