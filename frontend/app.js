@@ -2,6 +2,7 @@
 const $ = id => document.getElementById(id);
 const money = cents => new Intl.NumberFormat('zh-TW', {style:'currency',currency:'TWD',maximumFractionDigits:2}).format(cents/100);
 let config, account, pendingRequest, apiBase='';
+const quantityDraft={odd_lot:10,board_lot:1};
 const statusNames = {pending:'待成交',filled:'已成交',cancelled:'已取消'};
 function showError(error) { $('error').textContent=error.message; $('error').hidden=false; }
 function view(name) { for(const section of document.querySelectorAll('.view')) section.hidden=section.id!==name; for(const nav of document.querySelectorAll('.nav')) nav.classList.toggle('active',nav.dataset.view===name); }
@@ -45,11 +46,13 @@ function render() {
   $('holdings').textContent=positions.length.toString().padStart(2,'0');
   $('positions').replaceChildren();
   if(!positions.length) { $('positions').className='empty'; $('positions').textContent='尚無持倉。先建立一筆模擬委託。'; }
-  else { $('positions').className=''; const ul=document.createElement('ul'); for(const [symbol,quantity] of positions) { const li=document.createElement('li'); const label=document.createElement('span'), value=document.createElement('strong'); label.textContent=symbol+' '+(config.symbols.find(x=>x.symbol===symbol)?.name||'');value.textContent=quantity+' 股';li.append(label,value);ul.append(li); } $('positions').append(ul); }
+  else { $('positions').className=''; const ul=document.createElement('ul'); for(const [symbol,quantity] of positions) { const li=document.createElement('li'); const label=document.createElement('span'), value=document.createElement('strong'); label.textContent=symbol+' '+(config.symbols.find(x=>x.symbol===symbol)?.name||'');value.textContent=formatHolding(quantity);li.append(label,value);ul.append(li); } $('positions').append(ul); }
   $('orders').replaceChildren(); $('no-orders').hidden=account.orders.length>0;
   for(const order of [...account.orders].reverse()) {
     const tr=document.createElement('tr');
-    for(const value of [order.symbol,order.side==='buy'?'買入':'賣出',order.quantity,money(order.limit_price)]) { const td=document.createElement('td'); td.textContent=value; tr.append(td); }
+    const market=order.market_type||(order.quantity%1000===0?'board_lot':order.quantity<1000?'odd_lot':'legacy');
+    const quantityText=market==='board_lot'?(order.quantity/1000)+' 張（'+order.quantity.toLocaleString('zh-TW')+' 股）':order.quantity.toLocaleString('zh-TW')+' 股';
+    for(const value of [order.symbol,order.side==='buy'?'買入':'賣出',market==='board_lot'?'整股':market==='odd_lot'?'零股':'舊制',quantityText,money(order.limit_price)]) { const td=document.createElement('td'); td.textContent=value; tr.append(td); }
     const status=document.createElement('td'), badge=document.createElement('span'); badge.className='status '+order.status;badge.textContent=statusNames[order.status];status.append(badge);tr.append(status);
     const actions=document.createElement('td');
     if(order.status==='pending') {
@@ -61,6 +64,7 @@ function render() {
     }
     tr.append(actions);$('orders').append(tr);
   }
+  updateEstimate();
 }
 function selectInstrument(symbol) {
   $('symbol').value=symbol;
@@ -82,10 +86,57 @@ function renderWatchlist() {
   selectInstrument($('symbol').value);
 }
 $('symbol').onchange=()=>selectInstrument($('symbol').value);
+function formatHolding(shares) {
+  const lots=Math.floor(shares/1000), remainder=shares%1000;
+  return lots ? lots+' 張'+(remainder?' '+remainder+' 股':'') : shares+' 股';
+}
+function updateEstimate() {
+  const board=$('market-type').value==='board_lot', units=Number($('quantity').value);
+  const valid=Number.isInteger(units)&&units>=1&&units<=(board?499:999);
+  const shares=units*(board?1000:1), price=Math.round(Number($('price').value)*100);
+  $('quantity-summary').textContent=valid?(board?units.toLocaleString('zh-TW')+' 張 = '+shares.toLocaleString('zh-TW')+' 股':shares.toLocaleString('zh-TW')+' 股 · 零股委託'):(board?'整股請輸入 1～499 張':'零股請輸入 1～999 股');
+  const sell=$('side').value==='sell';
+  $('estimated-tax-row').hidden=!sell;
+  $('estimate-total-label').textContent=sell?'預估賣出淨額':'預估保留金額';
+  $('budget-note').textContent='';
+  if(!valid||!Number.isSafeInteger(price)||price<=0) {
+    for(const id of ['estimated-gross','estimated-fee','estimated-tax','estimated-total']) $(id).textContent='—';
+    return;
+  }
+  const gross=shares*price, fee=Math.max(2000,Math.round(gross*1425/1000000)), tax=sell?Math.round(gross*3/1000):0;
+  $('estimated-gross').textContent=money(gross);$('estimated-fee').textContent=money(fee);$('estimated-tax').textContent=money(tax);
+  $('estimated-total').textContent=money(sell?gross-fee-tax:gross+fee);
+  if(!sell&&gross>6000000) $('budget-note').textContent='超過單筆 NT$60,000 上限，請調整數量或改用零股。';
+  else if(account&&!sell) {
+    const reserved=account.orders.filter(o=>o.status==='pending'&&o.side==='buy').reduce((a,o)=>a+o.reserved,0);
+    if(gross+fee>account.cash-reserved) $('budget-note').textContent='可用模擬資金不足，請調整數量。';
+  } else if(account&&sell) {
+    const symbol=$('symbol').value;
+    const reserved=account.orders.filter(o=>o.status==='pending'&&o.side==='sell'&&o.symbol===symbol).reduce((a,o)=>a+o.quantity,0);
+    if(shares>(account.positions[symbol]||0)-reserved) $('budget-note').textContent='可賣股數不足；整股與零股委託共用持倉。';
+  }
+}
+function setMarketType(market) {
+  const previous=$('market-type').value;
+  if(previous===market) return;
+  const old=Number($('quantity').value);
+  if(Number.isInteger(old)&&old>=1&&old<=(previous==='board_lot'?499:999)) quantityDraft[previous]=old;
+  $('market-type').value=market;
+  const board=market==='board_lot';
+  $('quantity-label').textContent=board?'委託張數（張）':'委託股數（股）';
+  $('quantity').max=board?'499':'999';$('quantity').value=quantityDraft[market];
+  for(const [id,selected] of [['board-lot',board],['odd-lot',!board]]) { $(id).classList.toggle('selected',selected);$(id).setAttribute('aria-pressed',String(selected)); }
+  updateEstimate();
+}
+$('board-lot').onclick=()=>setMarketType('board_lot');
+$('odd-lot').onclick=()=>setMarketType('odd_lot');
+for(const id of ['quantity','price','side']) $(id).addEventListener('input',updateEstimate);
+$('symbol').addEventListener('change',updateEstimate);
 async function refresh() { account=await api('/account'); render(); }
 $('order-form').onsubmit=async event=>{
   event.preventDefault();$('error').hidden=true;$('submit-order').disabled=true;
-  const body={symbol:$('symbol').value,side:$('side').value,quantity:Number($('quantity').value),limit_price:Math.round(Number($('price').value)*100)};
+  const market=$('market-type').value;
+  const body={symbol:$('symbol').value,side:$('side').value,market_type:market,quantity:Number($('quantity').value)*(market==='board_lot'?1000:1),limit_price:Math.round(Number($('price').value)*100)};
   const payload=JSON.stringify(body);
   if(!pendingRequest||pendingRequest.payload!==payload) pendingRequest={payload,key:crypto.randomUUID()};
   try { await api('/orders',{method:'POST',headers:{'Idempotency-Key':pendingRequest.key},body:payload});pendingRequest=null;await refresh();view('activity'); }
@@ -107,6 +158,7 @@ $('logout').onclick=()=>{sessionStorage.removeItem('baglo_token');if(config?.aut
     $('notice').textContent=config.demo?'本機沙盒：可用「沙盒成交」驗證帳務。價格來自你輸入的限價，不是真實行情，績效不可用於評估策略。':'純模擬交易：委託暫保持待成交，行情與 AI 接入完成前不自動撮合。';
     for(const item of config.symbols){ const option=document.createElement('option');option.value=item.symbol;option.textContent=item.symbol+' '+item.name;$('symbol').append(option); }
     renderWatchlist();
+    updateEstimate();
     await finishLogin();
     const authenticated=config.environment==='local'||!!sessionStorage.getItem('baglo_token');
     $('login').hidden=authenticated;$('logout').hidden=!sessionStorage.getItem('baglo_token');

@@ -141,3 +141,49 @@ def test_malformed_body_and_missing_analysis_are_explicit(service):
     assert service.handler(malformed, None)['statusCode'] == 400
     analysis = json.loads(service.handler(event('/api/analysis'), None)['body'])
     assert analysis['status'] == 'not_configured' and analysis['recommendations'] == []
+
+
+def test_board_lot_quantity_stays_in_shares_and_has_market_type():
+    body = {**BODY, 'quantity': 1000, 'limit_price': 5000, 'market_type': 'board_lot'}
+    state, order = place_order(new_account('demo'), body, 'board-one')
+    assert order['quantity'] == 1000
+    assert order['market_type'] == 'board_lot'
+    assert order['reserved'] == 5_007_125
+    assert place_order(state, body, 'board-one') == (state, order)
+    state, _ = demo_match(state, 'board-one')
+    assert state['positions']['2330'] == 1000
+    assert state['cash'] == INITIAL_CASH - 5_007_125
+
+
+@pytest.mark.parametrize('market,quantity', [('odd_lot', 1000), ('odd_lot', 1001), ('board_lot', 999), ('board_lot', 1500), ('board_lot', 500000), ('unknown', 10)])
+def test_backend_rejects_wrong_market_quantities(market, quantity):
+    with pytest.raises(DomainError):
+        place_order(new_account('paper'), {**BODY, 'quantity': quantity, 'limit_price': 1, 'market_type': market}, 'bad-lots')
+
+
+def test_odd_lot_boundary_and_legacy_client_compatibility():
+    for quantity in [1, 999]:
+        _, order = place_order(new_account('paper'), {**BODY, 'quantity': quantity, 'limit_price': 100, 'market_type': 'odd_lot'}, 'odd-lots')
+        assert order['market_type'] == 'odd_lot'
+    _, board = place_order(new_account('paper'), {**BODY, 'quantity': 1000, 'limit_price': 100}, 'old-board')
+    assert board['market_type'] == 'board_lot'
+    with pytest.raises(DomainError, match='零股'):
+        place_order(new_account('paper'), {**BODY, 'quantity': 1001, 'limit_price': 100}, 'old-mixed')
+
+
+def test_order_id_cannot_be_reused_after_changing_market():
+    state, _ = place_order(new_account('paper'), {**BODY, 'market_type': 'odd_lot'}, 'same-mode')
+    with pytest.raises(DomainError, match='不同委託'):
+        place_order(state, {**BODY, 'market_type': 'board_lot', 'quantity': 1000}, 'same-mode')
+
+
+def test_board_and_odd_lot_sell_reserve_the_same_position():
+    state = new_account('demo')
+    state['positions']['2330'] = 1500
+    state, _ = place_order(state, {**BODY, 'side': 'sell', 'quantity': 1000, 'market_type': 'board_lot'}, 'sell-lot')
+    state, _ = place_order(state, {**BODY, 'side': 'sell', 'quantity': 500, 'market_type': 'odd_lot'}, 'sell-odd')
+    with pytest.raises(DomainError, match='股數不足'):
+        place_order(state, {**BODY, 'side': 'sell', 'quantity': 1, 'market_type': 'odd_lot'}, 'oversell')
+    state, _ = cancel_order(state, 'sell-lot')
+    state, _ = place_order(state, {**BODY, 'side': 'sell', 'quantity': 1000, 'market_type': 'board_lot'}, 'sell-again')
+    assert sum(o['quantity'] for o in state['orders'] if o['status'] == 'pending') == 1500

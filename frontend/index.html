@@ -35,11 +35,18 @@
         <h2>模擬委託</h2><p class="panel-description">先下判斷，再留下紀錄。</p>
         <form id="order-form">
           <label>交易標的<select id="symbol" required></select></label>
-          <div class="form-row"><label>交易方向<select id="side"><option value="buy">買入</option><option value="sell">賣出</option></select></label><label>股數<input id="quantity" type="number" min="1" max="100000" step="1" value="10" required></label></div>
+          <div class="lot-switch" role="group" aria-label="交易類別">
+            <button type="button" id="board-lot" aria-pressed="false">整股 <span>張</span></button>
+            <button type="button" id="odd-lot" class="selected" aria-pressed="true">零股 <span>股</span></button>
+          </div><input type="hidden" id="market-type" value="odd_lot">
+          <div class="form-row"><label>交易方向<select id="side"><option value="buy">買入</option><option value="sell">賣出</option></select></label><label><span id="quantity-label">委託股數（股）</span><input id="quantity" aria-labelledby="quantity-label" aria-describedby="quantity-summary" type="number" min="1" max="999" step="1" value="10" required></label></div>
+          <div id="quantity-summary" class="quantity-summary" aria-live="polite">10 股 · 零股委託</div>
           <label>限價（新臺幣／股）<input id="price" type="number" min="0.01" max="100000" step="0.01" placeholder="輸入你的目標價格" required></label>
           <div class="order-type"><span class="mini-dot"></span> LIMIT ORDER <span>限價單</span></div>
+          <dl class="order-estimate"><div><dt>預估委託金額</dt><dd id="estimated-gross">—</dd></div><div><dt>預估手續費</dt><dd id="estimated-fee">—</dd></div><div id="estimated-tax-row" hidden><dt>預估證交稅</dt><dd id="estimated-tax">—</dd></div><div class="estimate-total"><dt id="estimate-total-label">預估保留金額</dt><dd id="estimated-total">—</dd></div></dl>
+          <div id="budget-note" class="budget-note" aria-live="polite"></div>
           <button class="button primary" id="submit-order" type="submit">建立模擬委託 <span>↗</span></button>
-          <div class="form-hint">單筆買入上限 NT$60,000；整數股模擬。限價不代表保證成交。</div>
+          <div class="form-hint">整股 1 張 = 1,000 股；零股 1～999 股。單筆買入上限 NT$60,000，預估費用不含滑價。</div>
         </form>
         <div class="order-foot"><span class="shield" aria-hidden="true">◇</span><span>虛擬資金<br><b>不連接真實券商</b></span></div>
       </article>
@@ -62,7 +69,7 @@
     </div>
   </section>
   <section id="analysis" class="view" hidden><article class="card analysis-card"><div class="card-top"><span class="eyebrow">PREMARKET RESEARCH</span><span class="pill muted">資料接入中</span></div><h2>讓每個建議，<br>都有據可循<span class="lime-text">。</span></h2><p class="muted-text">盤前三面分析與 OpenAI 尚在接入階段。以下呈現資料就緒狀態，不是投資評分。</p><div class="analysis-grid"><article><span>01 / TECHNICAL</span><h3>技術面</h3><p>均線・動能・量價・波動</p><b>尚未接入 ↗</b></article><article><span>02 / FUNDAMENTAL</span><h3>基本面</h3><p>月營收・財報・估值</p><b>尚未接入 ↗</b></article><article><span>03 / OWNERSHIP</span><h3>籌碼面</h3><p>法人・融資券・資金流向</p><b>尚未接入 ↗</b></article></div><div class="notice">AI 推薦與自動交易暫未開放；目前不會呼叫付費模型或產生交易訊號。</div></article></section>
-  <section id="activity" class="view" hidden><article class="card activity-card"><div class="card-top"><div><span class="eyebrow">YOUR DECISIONS, ON RECORD</span><h2>每筆委託，都有紀錄。</h2></div><button id="refresh" class="button secondary">重新整理 ↻</button></div><div class="table-wrap"><table><thead><tr><th>標的</th><th>方向</th><th>股數</th><th>限價</th><th>狀態</th><th>操作</th></tr></thead><tbody id="orders"></tbody></table></div><p id="no-orders" class="empty">還沒有委託，從一個想法開始。</p><p class="form-hint">部署版暫不自動撮合。本機沙盒成交使用委託限價，非真實市場價格；不模擬委託簿、滑價與交割。每筆手續費最低 NT$20，賣出另計 0.3% 股票交易稅。示範帳本最多 150 筆委託。</p></article></section>
+  <section id="activity" class="view" hidden><article class="card activity-card"><div class="card-top"><div><span class="eyebrow">YOUR DECISIONS, ON RECORD</span><h2>每筆委託，都有紀錄。</h2></div><button id="refresh" class="button secondary">重新整理 ↻</button></div><div class="table-wrap"><table><thead><tr><th>標的</th><th>方向</th><th>類別</th><th>委託數量</th><th>限價</th><th>狀態</th><th>操作</th></tr></thead><tbody id="orders"></tbody></table></div><p id="no-orders" class="empty">還沒有委託，從一個想法開始。</p><p class="form-hint">部署版暫不自動撮合。本機沙盒成交使用委託限價，非真實市場價格；不模擬委託簿、滑價與交割。每筆手續費最低 NT$20，賣出另計 0.3% 股票交易稅。示範帳本最多 150 筆委託。</p></article></section>
   <footer><span>BAGLO® <b>A LITTLE LESS GUESSWORK.</b></span><span>純模擬交易 · 所有金額皆為虛擬資金</span></footer>
 </main>
 </body></html>

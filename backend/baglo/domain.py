@@ -33,9 +33,9 @@ def integer(value, field, minimum=1, maximum=100_000):
 def place_order(state, body, key):
     if not isinstance(key, str) or not 8 <= len(key) <= 100:
         raise DomainError('缺少有效的 Idempotency-Key')
-    allowed = {'symbol', 'side', 'quantity', 'limit_price'}
-    if set(body) != allowed:
-        raise DomainError('委託欄位需為 symbol、side、quantity、limit_price')
+    required = {'symbol', 'side', 'quantity', 'limit_price'}
+    if not required <= set(body) or set(body) - required - {'market_type'}:
+        raise DomainError('委託欄位需為 symbol、side、quantity、limit_price，可另傳 market_type')
     digest = fingerprint(body)
     for old in state['orders']:
         if old['id'] == key:
@@ -47,7 +47,16 @@ def place_order(state, body, key):
     symbol, side = body['symbol'], body['side']
     if symbol not in UNIVERSE or side not in ('buy', 'sell'):
         raise DomainError('不支援的股票或交易方向')
-    quantity = integer(body['quantity'], '股數')
+    quantity = integer(body['quantity'], '股數', maximum=499_000)
+    # API quantities always represent shares, including board-lot orders.
+    # Infer the venue only for older clients; saved orders are never rewritten.
+    market_type = body.get('market_type', 'board_lot' if quantity % 1000 == 0 else 'odd_lot')
+    if market_type not in ('board_lot', 'odd_lot'):
+        raise DomainError('交易類別必須為整股或零股')
+    if market_type == 'odd_lot' and quantity > 999:
+        raise DomainError('零股每筆委託限 1～999 股；1,000 股請選整股')
+    if market_type == 'board_lot' and (quantity < 1000 or quantity % 1000):
+        raise DomainError('整股委託須為 1,000 股的整數倍（1 張 = 1,000 股）')
     price = integer(body['limit_price'], '限價（分）', maximum=10_000_000)
     value = quantity * price
     fee = max(2000, int((Decimal(value) * Decimal('0.001425')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)))
@@ -63,7 +72,7 @@ def place_order(state, body, key):
         if quantity > state['positions'].get(symbol, 0) - reserved:
             raise DomainError('可賣股數不足；本版不支援放空')
     order = {'id': key, 'fingerprint': digest, 'symbol': symbol, 'side': side,
-             'quantity': quantity, 'limit_price': price, 'reserved': value + fee if side == 'buy' else 0,
+             'quantity': quantity, 'market_type': market_type, 'limit_price': price, 'reserved': value + fee if side == 'buy' else 0,
              'status': 'pending', 'created_at': now(), 'source': 'manual'}
     result = deepcopy(state)
     result['orders'].append(order)
