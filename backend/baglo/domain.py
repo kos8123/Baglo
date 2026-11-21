@@ -71,6 +71,10 @@ def place_order(state, body, key, instrument=None):
     tick = stock_price_tick(price)
     if price % tick:
         raise DomainError(f'此價位升降單位為 NT${tick/100:g}，請使用有效限價')
+    limits = (instrument or {}).get('price_limits')
+    if limits and limits.get('status') == 'available':
+        if not limits['lower'] <= price <= limits['upper']:
+            raise DomainError(f"限價超出 {limits['as_of']} 漲跌停範圍 NT${limits['lower']/100:g}～{limits['upper']/100:g}")
     value = quantity * price
     fee = max(2000, int((Decimal(value) * Decimal('0.001425')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)))
     pending = [o for o in state['orders'] if o['status'] == 'pending']
@@ -78,8 +82,6 @@ def place_order(state, body, key, instrument=None):
         reserved = sum(o['reserved'] for o in pending if o['side'] == 'buy')
         if value + fee > state['cash'] - reserved:
             raise DomainError('可用模擬資金不足')
-        if value > INITIAL_CASH // 5:
-            raise DomainError('單筆委託最多為初始本金的 20%')
     else:
         reserved = sum(o['quantity'] for o in pending if o['side'] == 'sell' and o['symbol'] == symbol)
         if quantity > state['positions'].get(symbol, 0) - reserved:

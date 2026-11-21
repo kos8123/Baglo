@@ -112,7 +112,7 @@ def test_fugle_separates_venues_and_never_uses_trial_price(service,monkeypatch,t
     assert regular['price']==200000 and odd['price']==200500
     assert regular['is_realtime'] and odd['is_realtime']
     service.quote('2330','odd_lot')
-    assert len(calls)==2
+    assert len(calls)==3
     assert all('fake-test-key' not in p.read_text() for p in tmp_path.glob('*.json'))
 
 def test_stale_or_closed_fugle_trade_not_marked_live(service,monkeypatch):
@@ -225,3 +225,20 @@ def test_order_replay_does_not_require_upstream_market_service(tmp_path,monkeypa
     event['body']=json.dumps({**body,'quantity':11})
     assert api.handler(event,None)['statusCode']==409
     assert len(store.read('alice')['orders'])==1
+
+
+def test_limits_uses_provider_values_and_blocks_missing_or_prior_day(service, monkeypatch):
+    monkeypatch.setenv('BAGLO_FUGLE_API_KEY', 'fixture')
+    original=service.fetcher
+    def fetch(url, headers=None):
+        if '/ticker/' in url:
+            return {'symbol':'2330','date':'2026-11-20','limitDownPrice':1800,'limitUpPrice':2200,'referencePrice':2000}
+        return original(url,headers)
+    service.fetcher=fetch
+    limits=service.price_limits('2330')
+    assert limits['lower']==180000 and limits['upper']==220000
+    assert service.order_instrument('2330')['price_limits']==limits
+    service.clock=lambda: NOW+timedelta(days=3)
+    assert service.price_limits('2330')['status']=='unavailable'
+    with pytest.raises(DomainError,match='漲跌停'):
+        service.order_instrument('2330')

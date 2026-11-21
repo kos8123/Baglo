@@ -219,10 +219,34 @@ class MarketService:
         return item
 
     def order_instrument(self, symbol):
-        # The original six instruments remain usable for manual pending orders on outages.
-        if symbol in UNIVERSE and symbol not in self.registry:
-            return {'symbol': symbol, 'name': UNIVERSE[symbol], 'instrument_type': 'common_stock', 'exchange': 'TWSE', 'trading_unit': 1000}
-        return self.resolve(symbol)
+        item = dict(self.resolve(symbol))
+        limits = self.price_limits(symbol)
+        if limits['status'] != 'available':
+            raise DomainError('尚未取得可信的漲跌停價格，請稍後重新取得報價再下單', 503)
+        item['price_limits'] = limits
+        return item
+
+    def price_limits(self, symbol):
+        try:
+            key = self.fugle_key()
+            if not key:
+                raise DataUnavailable('未設定富果行情')
+            cached = self.cache.get('fugle-limits:'+symbol, lambda: self.fetcher(
+                'https://api.fugle.tw/marketdata/v1.0/stock/intraday/ticker/'+symbol,
+                {'X-API-KEY': key}), ttl=60)
+            data = cached['data']
+            lower, upper = cents(data.get('limitDownPrice')), cents(data.get('limitUpPrice'))
+            local = self.clock().astimezone(TZ).date()
+            as_of = str(data.get('date', ''))
+            age = (local - datetime.strptime(as_of, '%Y-%m-%d').date()).days
+            if data.get('symbol') != symbol or not lower or not upper or lower > upper or cached['stale_cache'] or not 0 <= age <= 4:
+                raise DataUnavailable('漲跌停資料不完整或過期')
+            if local.weekday() < 5 and as_of != local.isoformat():
+                raise DataUnavailable('尚未取得當日漲跌停資料')
+            return {'status': 'available', 'lower': lower, 'upper': upper, 'reference': cents(data.get('referencePrice')),
+                    'as_of': as_of, 'source': 'Fugle', 'historical_session': as_of != local.isoformat()}
+        except Exception:
+            return {'status': 'unavailable', 'reason': '無法確認漲跌停範圍；暫停新增委託，不以昨收推算'}
 
     def search(self, query='', low=None, high=None):
         rows = list(self.index().values())
@@ -260,6 +284,8 @@ class MarketService:
         if market_type not in ('odd_lot', 'board_lot'):
             raise DomainError('交易類別不正確')
         instrument = self.resolve(symbol)
+        instrument = dict(instrument)
+        instrument['price_limits'] = self.price_limits(symbol)
         fallback = {'price': instrument['price'], 'kind': 'close', 'source': instrument['source'],
                     'as_of': instrument['as_of'], 'fetched_at': instrument['fetched_at'],
                     'stale_cache': instrument['stale_cache'], 'is_realtime': False,

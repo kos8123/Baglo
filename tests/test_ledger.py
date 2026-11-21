@@ -32,7 +32,7 @@ def test_reject_invalid_orders(field, value):
         place_order(new_account('paper'), {**BODY, field: value}, 'order-one')
 
 def test_reject_oversized_order_and_naked_short_and_client_injected_fill():
-    for body in [{**BODY, 'quantity': 100}, {**BODY, 'side': 'sell'}, {**BODY, 'status': 'filled'}]:
+    for body in [{**BODY, 'quantity': 400}, {**BODY, 'side': 'sell'}, {**BODY, 'status': 'filled'}]:
         with pytest.raises(DomainError):
             place_order(new_account('paper'), body, 'order-one')
 
@@ -108,6 +108,7 @@ def test_dynamodb_conflict_reloads_before_mutating():
 @pytest.fixture
 def service(tmp_path, monkeypatch):
     monkeypatch.setattr(api, '_store', Store(mode='demo', path=str(tmp_path/'db')))
+    monkeypatch.setattr(api, '_markets', SimpleNamespace(order_instrument=lambda symbol: {'symbol': symbol, 'price_limits': {'status':'available','lower':90000,'upper':110000,'as_of':'2026-11-20'}}))
     monkeypatch.setenv('BAGLO_DEMO', '1')
     monkeypatch.delenv('BAGLO_TABLE', raising=False)
     return api
@@ -187,3 +188,14 @@ def test_board_and_odd_lot_sell_reserve_the_same_position():
     state, _ = cancel_order(state, 'sell-lot')
     state, _ = place_order(state, {**BODY, 'side': 'sell', 'quantity': 1000, 'market_type': 'board_lot'}, 'sell-again')
     assert sum(o['quantity'] for o in state['orders'] if o['status'] == 'pending') == 1500
+
+
+def test_no_artificial_buy_cap_and_price_limits():
+    state, order = place_order(new_account('paper'), {**BODY, 'quantity': 100}, 'large-buy')
+    assert order['reserved'] > INITIAL_CASH // 5
+    instrument = {'price_limits': {'status': 'available', 'lower': 90000, 'upper': 110000, 'as_of': '2026-11-20'}}
+    for price in [89500, 110500]:
+        with pytest.raises(DomainError, match='漲跌停'):
+            place_order(new_account('paper'), {**BODY, 'limit_price': price}, 'bad-limit', instrument)
+    for price in [90000, 110000]:
+        place_order(new_account('paper'), {**BODY, 'limit_price': price}, 'boundary', instrument)
