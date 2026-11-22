@@ -7,8 +7,12 @@ if [[ -n "${BAGLO_NODE_BIN:-}" ]]; then
 else
   command -v node >/dev/null || { echo 'Node.js is required'; exit 1; }
 fi
-command -v pnpm >/dev/null || corepack enable
-pnpm --dir frontend install --frozen-lockfile
+if [[ -n "${BAGLO_PNPM_CLI:-}" ]]; then
+  "$BAGLO_NODE_BIN" "$BAGLO_PNPM_CLI" --dir frontend install --frozen-lockfile
+else
+  command -v npx >/dev/null || { echo 'npx is required to install the pinned pnpm version'; exit 1; }
+  npx --yes pnpm@11.25.0 --dir frontend install --frozen-lockfile
+fi
 python3 scripts/build_frontend.py --output dist --api-base "$BAGLO_API_BASE" --landing
 test -f dist/index.html
 test -f dist/terminal.html

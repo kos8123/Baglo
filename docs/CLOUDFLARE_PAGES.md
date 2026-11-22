@@ -24,9 +24,10 @@ Production 與 Preview 都設定公開環境變數：
 ```text
 BAGLO_API_BASE=https://5ck9jrcbe3.execute-api.us-east-1.amazonaws.com
 NODE_VERSION=24
+SKIP_DEPENDENCY_INSTALL=1
 ```
 
-`BAGLO_API_BASE` 是公開 API Gateway 網址，不是密鑰。Cloudflare Pages 會把 `home.html` 發布成網站根目錄，把交易工作台發布為 `/terminal.html`，並保留 `/privacy.html` 與 `/terms.html`。
+`BAGLO_API_BASE` 是公開 API Gateway 網址，不是密鑰。`SKIP_DEPENDENCY_INSTALL` 避免 Pages 將根目錄的 Python 後端當成前端相依套件安裝；建置腳本會自行使用固定的 pnpm 版本安裝前端。Cloudflare Pages 會把 `home.html` 發布成網站根目錄，把交易工作台發布為 `/terminal.html`，並保留 `/privacy.html` 與 `/terms.html`。
 
 ## 將 Pages 網址加入 AWS
 
