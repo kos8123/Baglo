@@ -13,7 +13,6 @@ import {
   RefreshCw,
   Bot,
   BriefcaseBusiness,
-  BookOpen,
   History as HistoryIcon,
 } from "lucide-react";
 import { api, dateLabel, initialize, login, logout, money, pct } from "./lib";
@@ -59,7 +58,19 @@ function Terminal({ config }: { config: Config }) {
       config.environment === "local" || !!sessionStorage.getItem("baglo_token"),
     ),
     [selected, setSelected] = useState<Instrument>(config.symbols[0]),
-    [view, setView] = useState("trade"),
+    [view, setView] = useState(() => {
+      const value = location.hash.slice(1);
+      return [
+        "trade",
+        "positions",
+        "orders",
+        "research",
+        "ai",
+        "backtest",
+      ].includes(value)
+        ? value
+        : "trade";
+    }),
     [bottom, setBottom] = useState("positions"),
     [dirty, setDirty] = useState(false),
     [picked, setPicked] = useState<Instrument[]>([]),
@@ -67,6 +78,22 @@ function Terminal({ config }: { config: Config }) {
       null,
     ),
     [receipt, setReceipt] = useState(false);
+  useEffect(() => {
+    location.hash = view;
+  }, [view]);
+  useEffect(() => {
+    const sync = () => {
+      const value = location.hash.slice(1);
+      if (
+        ["trade", "positions", "orders", "research", "ai", "backtest"].includes(
+          value,
+        )
+      )
+        setView(value);
+    };
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
   const notify = (message: string, error = false) =>
     setToast({ message, error });
   useEffect(() => {
@@ -193,15 +220,6 @@ function Terminal({ config }: { config: Config }) {
               <span>{label}</span>
             </button>
           ))}
-          <a
-            className="nav-docs"
-            href="/docs/index.html"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <BookOpen size={21} />
-            <span>Swagger API</span>
-          </a>
         </nav>
         <span className="rail-bottom">TW</span>
       </aside>

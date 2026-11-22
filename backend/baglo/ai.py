@@ -33,7 +33,7 @@ def settings(state):
 
 def status(state):
     return {'provider':provider(), 'configured':configured(), 'model':current_model(), 'settings':settings(state),
-            'jobs':state.get('ai_jobs',[]), 'schedule_configured':bool(os.getenv('BAGLO_AI_WORKER') and os.getenv('BAGLO_AI_SCHEDULE')=='ENABLED' and os.getenv('BAGLO_AI_ACCOUNTS')),
+            'jobs':state.get('ai_jobs',[]), 'schedule_configured':bool(os.getenv('BAGLO_LOCAL_SCHEDULE')=='ENABLED' or (os.getenv('BAGLO_AI_WORKER') and os.getenv('BAGLO_AI_SCHEDULE')=='ENABLED' and os.getenv('BAGLO_AI_ACCOUNTS'))),
             'reason':'需要模型後端金鑰、每日排程與帳戶名單；只有開市且可信即時報價時才可送模擬委託。'}
 
 def save_settings(state, body):
