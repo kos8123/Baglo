@@ -11,6 +11,9 @@ import {
   X,
   ArrowRight,
   RefreshCw,
+  Bot,
+  BriefcaseBusiness,
+  BookOpen,
 } from "lucide-react";
 import { api, dateLabel, initialize, login, logout, money, pct } from "./lib";
 import type {
@@ -26,6 +29,8 @@ import { StockSearch } from "./components/StockSearch";
 import { PriceChart } from "./components/PriceChart";
 import { OrderTicket } from "./components/OrderTicket";
 import { Orders, Positions } from "./components/Orders";
+import { Portfolio } from "./components/Portfolio";
+import { AiTrading } from "./components/AiTrading";
 import { Research } from "./components/Research";
 export default function App() {
   const init = useQuery({
@@ -162,7 +167,9 @@ function Terminal({ config }: { config: Config }) {
   const nav = [
     { key: "trade", label: "交易工作台", icon: ChartCandlestick },
     { key: "research", label: "個股研究", icon: FlaskConical },
+    { key: "positions", label: "我的持倉", icon: BriefcaseBusiness },
     { key: "orders", label: "委託紀錄", icon: ClipboardList },
+    { key: "ai", label: "AI 模擬交易", icon: Bot },
   ];
   return (
     <div className="app-shell">
@@ -184,6 +191,15 @@ function Terminal({ config }: { config: Config }) {
               <span>{label}</span>
             </button>
           ))}
+          <a
+            className="nav-docs"
+            href="/docs/index.html"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <BookOpen size={21} />
+            <span>Swagger API</span>
+          </a>
         </nav>
         <span className="rail-bottom">TW</span>
       </aside>
@@ -192,18 +208,6 @@ function Terminal({ config }: { config: Config }) {
           <div className="wordmark">
             Baglo<span className="product-name">交易終端</span>
           </div>
-          <nav className="top-nav">
-            {nav.map(({ key, label }) => (
-              <Button
-                key={key}
-                variant="ghost"
-                className={view === key ? "active" : ""}
-                onClick={() => setView(key)}
-              >
-                {label}
-              </Button>
-            ))}
-          </nav>
           <div className="connection">
             <i />
             {config.demo
@@ -261,7 +265,7 @@ function Terminal({ config }: { config: Config }) {
               {config.demo
                 ? "純模擬帳戶・真實行情參考・沙盒成交僅依委託限價示範"
                 : "純模擬帳戶・委託不自動撮合"}
-              <b> AI 推薦與自動交易尚未啟用</b>
+              <b> AI 設定與執行紀錄請至左側專區</b>
             </span>
           </div>
           {!authorized && (
@@ -443,6 +447,24 @@ function Terminal({ config }: { config: Config }) {
               />
             </div>
           </div>
+          {view === "positions" && (
+            <Portfolio
+              enabled={authorized}
+              onSelect={(item) => {
+                select(item);
+                setView("trade");
+              }}
+            />
+          )}
+          {view === "ai" && (
+            <AiTrading
+              enabled={authorized}
+              config={config}
+              current={current}
+              notify={notify}
+              onAccepted={() => setReceipt(true)}
+            />
+          )}
           {view === "research" && (
             <Research
               data={research.data}

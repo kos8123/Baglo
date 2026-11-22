@@ -1660,3 +1660,186 @@ footer {
     animation: none !important;
   }
 }
+/* One navigation surface, including on phones. */
+.app-rail {
+  width: 156px;
+  flex-basis: 156px;
+  padding: 18px 10px;
+  gap: 30px;
+}
+.app-rail nav {
+  width: 100%;
+  gap: 7px;
+}
+.app-rail nav button,
+.app-rail nav .nav-docs {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  height: 43px;
+  padding: 8px 9px;
+  border-radius: 5px;
+  color: #8ca1b8;
+}
+.app-rail nav span {
+  display: inline;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.app-rail nav .nav-docs:hover {
+  background: #283340;
+}
+.top-nav {
+  display: none;
+}
+.portfolio-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 18px;
+  gap: 15px;
+  border-bottom: 1px solid var(--border);
+}
+.portfolio-summary span {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+.portfolio-summary strong {
+  display: block;
+  font-size: 23px;
+  margin-top: 8px;
+}
+.ai-settings {
+  padding: 0 18px 18px;
+}
+.ai-settings .panel-heading {
+  margin: 0 -18px 18px;
+}
+.ai-settings .field {
+  margin-bottom: 15px;
+}
+.ai-settings .field input {
+  margin-top: 7px;
+}
+.check-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+  font-size: 12px;
+}
+.check-field input {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.ai-symbols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+}
+.ai-job {
+  padding: 18px;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.9;
+}
+.ai-job h3 {
+  font-size: 16px;
+  margin: 10px 0;
+}
+.ai-job p {
+  font-size: 12px;
+}
+.ai-job .btn {
+  margin-top: 12px;
+}
+.ai-workspace .research-grid {
+  grid-template-columns: 1fr 1fr;
+}
+.ai-settings .panel-footnote {
+  padding-left: 0;
+  padding-right: 0;
+}
+@media (max-width: 900px) {
+  .app-rail {
+    display: flex;
+    width: 54px;
+    flex-basis: 54px;
+    padding: 16px 5px;
+  }
+  .app-rail nav span {
+    display: none;
+  }
+  .app-rail nav button,
+  .app-rail nav .nav-docs {
+    justify-content: center;
+    padding: 8px 4px;
+  }
+  .app-rail {
+    gap: 24px;
+  }
+  .ai-workspace .research-grid {
+    grid-template-columns: 1fr;
+  }
+  .portfolio-summary {
+    padding: 12px;
+    gap: 10px;
+  }
+  .portfolio-summary strong {
+    font-size: 17px;
+  }
+  .portfolio-summary span {
+    font-size: 9px;
+  }
+  .symbol-bar {
+    flex-direction: column;
+  }
+  .symbol-heading,
+  .instrument-search {
+    width: 100%;
+  }
+  .daily-close {
+    flex-basis: auto;
+    margin-left: auto;
+  }
+}
+@media (max-width: 700px) {
+  .topbar .wordmark {
+    font-size: 19px;
+  }
+  .topbar {
+    height: 53px;
+  }
+  .symbol-heading h1,
+  .symbol-heading h1 span {
+    font-size: 16px;
+  }
+  .market-tag {
+    display: none;
+  }
+  .daily-close strong {
+    font-size: 17px;
+  }
+  .app-rail nav {
+    gap: 8px;
+  }
+  .ai-symbols {
+    grid-template-columns: 1fr;
+  }
+  .portfolio-summary {
+    grid-template-columns: 1fr;
+  }
+  .portfolio-summary > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  .portfolio-summary strong {
+    margin: 0;
+  }
+  .dialog-content {
+    max-width: calc(100vw - 24px);
+  }
+}

@@ -27,6 +27,10 @@ def build(output, api_base=''):
     if output in [ROOT, frontend] or output in ROOT.parents:
         raise ValueError('Build output must be a dedicated directory')
     subprocess.run([node, str(vite), 'build', '--outDir', str(output)], cwd=frontend, check=True)
+    swagger=frontend/'node_modules/swagger-ui-dist'
+    (output/'docs').mkdir(exist_ok=True)
+    for name in ['swagger-ui-bundle.js','swagger-ui.css','LICENSE']:
+        shutil.copyfile(swagger/name,output/'docs'/name)
     (output/'config.json').write_text(json.dumps({'api_base': api_base.rstrip('/')})+'\n')
 
 if __name__ == '__main__':

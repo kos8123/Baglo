@@ -9,11 +9,15 @@ Parameters:
     Type: String
     Default: DISABLED
     AllowedValues: [ENABLED, DISABLED]
+  OpenAISecretArn: {Type: String, Default: ''}
+  OpenAIModel: {Type: String, Default: gpt-4.1-mini}
+  AiAccounts: {Type: String, Default: '', Description: 'Comma-separated Cognito sub IDs explicitly allowed for daily AI paper trading'}
   FugleSecretArn:
     Type: String
     Default: ''
     Description: Optional existing Secrets Manager secret ARN; never the API key itself
 Conditions:
+  HasOpenAISecret: !Not [!Equals [!Ref OpenAISecretArn, '']]
   HasFugleSecret: !Not [!Equals [!Ref FugleSecretArn, '']]
 Resources:
   Ledger:
@@ -157,7 +161,7 @@ Resources:
       StageName: '$default'
       CorsConfiguration:
         AllowOrigins: [!Sub 'https://${Distribution.DomainName}']
-        AllowMethods: [GET, POST, OPTIONS]
+        AllowMethods: [GET, POST, PUT, OPTIONS]
         AllowHeaders: [Authorization, Content-Type, Idempotency-Key]
         MaxAge: 300
       DefaultRouteSettings: {ThrottlingBurstLimit: 10, ThrottlingRateLimit: 5}
@@ -177,6 +181,13 @@ Resources:
         Version: '2012-10-17'
         Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: 'sts:AssumeRole'}]
       Policies:
+        - PolicyName: dispatch-ai
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ai'
         - PolicyName: own-ledger-and-logs
           PolicyDocument:
             Version: '2012-10-17'
@@ -219,6 +230,11 @@ Resources:
           BAGLO_FUGLE_SECRET_ARN: !Ref FugleSecretArn
           BAGLO_ENV: !Ref Environment
           BAGLO_DEMO: '0'
+          BAGLO_OPENAI_SECRET_ARN: !Ref OpenAISecretArn
+          BAGLO_OPENAI_MODEL: !Ref OpenAIModel
+          BAGLO_AI_WORKER: !Ref AiWorker
+          BAGLO_AI_SCHEDULE: !Ref PremarketScheduleState
+          BAGLO_AI_ACCOUNTS: !Ref AiAccounts
           BAGLO_CLIENT_ID: !Ref Client
           BAGLO_AUTH_DOMAIN: !Sub 'https://${AuthDomain}.auth.${AWS::Region}.amazoncognito.com'
       Events:
@@ -230,6 +246,14 @@ Resources:
           Properties:
             ApiId: !Ref HttpApi
             Path: /api/health
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth: {Authorizer: NONE}
+        PublicOpenAPI:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/openapi.json
             Method: GET
             PayloadFormatVersion: '2.0'
             Auth: {Authorizer: NONE}
@@ -253,6 +277,25 @@ Resources:
         Version: '2012-10-17'
         Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: 'sts:AssumeRole'}]
       Policies:
+        - PolicyName: ai-paper-ledger
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem]
+                Resource: !GetAtt Ledger.Arn
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: !Sub '${ResearchBucket.Arn}/market/*'
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt AiWorker.Arn
+              - !If
+                - HasFugleSecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref FugleSecretArn
+                - !Ref AWS::NoValue
         - PolicyName: premarket-audit
           PolicyDocument:
             Version: '2012-10-17'
@@ -271,11 +314,18 @@ Resources:
       Handler: baglo.jobs.handler
       Runtime: python3.12
       Architectures: [arm64]
-      MemorySize: 128
-      Timeout: 30
+      Timeout: 180
+      MemorySize: 256
       Role: !GetAtt PremarketRole.Arn
       Environment:
-        Variables: {BAGLO_DATA_BUCKET: !Ref ResearchBucket}
+        Variables:
+          BAGLO_DATA_BUCKET: !Ref ResearchBucket
+          BAGLO_TABLE: !Ref Ledger
+          BAGLO_DEMO: '0'
+          BAGLO_FUGLE_SECRET_ARN: !Ref FugleSecretArn
+          BAGLO_OPENAI_SECRET_ARN: !Ref OpenAISecretArn
+          BAGLO_AI_WORKER: !Ref AiWorker
+          BAGLO_AI_ACCOUNTS: !Ref AiAccounts
   SchedulerRole:
     Type: AWS::IAM::Role
     Properties:
@@ -295,15 +345,77 @@ Resources:
   PremarketSchedule:
     Type: AWS::Scheduler::Schedule
     Properties:
-      Description: Premarket readiness audit only; daily orchestration and AI remain disabled
-      ScheduleExpression: 'cron(10 8 ? * MON-FRI *)'
+      Description: Prepare daily AI paper research for opted-in configured accounts
+      ScheduleExpression: 'cron(30 8 ? * MON-FRI *)'
       ScheduleExpressionTimezone: Asia/Taipei
       State: !Ref PremarketScheduleState
       FlexibleTimeWindow: {Mode: 'OFF'}
       Target:
         Arn: !GetAtt Premarket.Arn
         RoleArn: !GetAtt SchedulerRole.Arn
-        Input: '{}'
+        Input: '{"phase":"analyze"}'
+        RetryPolicy: {MaximumEventAgeInSeconds: 300, MaximumRetryAttempts: 1}
+  AiWorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: 'sts:AssumeRole'}]
+      Policies:
+        - PolicyName: ai-research-only
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem]
+                Resource: !GetAtt Ledger.Arn
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: !Sub '${ResearchBucket.Arn}/market/*'
+              - !If
+                - HasOpenAISecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref OpenAISecretArn
+                - !Ref AWS::NoValue
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !GetAtt AiWorkerLog.Arn
+  AiWorkerLog:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-ai'
+      RetentionInDays: 7
+  AiWorker:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-ai'
+      CodeUri: ../backend/
+      Handler: baglo.ai.worker
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 512
+      Timeout: 180
+      Role: !GetAtt AiWorkerRole.Arn
+      Environment:
+        Variables:
+          BAGLO_TABLE: !Ref Ledger
+          BAGLO_DATA_BUCKET: !Ref ResearchBucket
+          BAGLO_OPENAI_SECRET_ARN: !Ref OpenAISecretArn
+          BAGLO_OPENAI_MODEL: !Ref OpenAIModel
+          BAGLO_DEMO: '0'
+  AiExecutionSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Description: Submit opted-in AI paper orders after fresh quotes and risk validation
+      ScheduleExpression: 'cron(5 9 ? * MON-FRI *)'
+      ScheduleExpressionTimezone: Asia/Taipei
+      State: !Ref PremarketScheduleState
+      FlexibleTimeWindow: {Mode: 'OFF'}
+      Target:
+        Arn: !GetAtt Premarket.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"phase":"execute"}'
         RetryPolicy: {MaximumEventAgeInSeconds: 300, MaximumRetryAttempts: 1}
 Outputs:
   WebsiteUrl: {Value: !Sub 'https://${Distribution.DomainName}'}

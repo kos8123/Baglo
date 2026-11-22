@@ -23,6 +23,7 @@ export function Orders({
       }),
     onSuccess: (_, vars) => {
       void client.invalidateQueries({ queryKey: ["account"] });
+      void client.invalidateQueries({ queryKey: ["portfolio"] });
       notify(
         vars.type === "cancel"
           ? "委託已取消"
@@ -61,6 +62,7 @@ export function Orders({
           size="sm"
           onClick={() => {
             void client.invalidateQueries({ queryKey: ["account"] });
+            void client.invalidateQueries({ queryKey: ["portfolio"] });
           }}
         >
           <RefreshCw size={13} /> 更新

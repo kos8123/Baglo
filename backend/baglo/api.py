@@ -36,6 +36,9 @@ def response(status, body):
 def handler(event, context):
     path = event.get('rawPath', '')
     method = event.get('requestContext', {}).get('http', {}).get('method', 'GET')
+    if path == '/api/openapi.json' and method == 'GET':
+        from .openapi import document
+        return response(200, document())
     if path == '/api/health' and method == 'GET':
         return response(200, {'ok': True, 'service': 'Baglo', 'trading': 'paper_only'})
     if path == '/api/config' and method == 'GET':
@@ -45,7 +48,7 @@ def handler(event, context):
             'price_ticks': stock_price_ticks(),
             'symbols': [{'symbol': k, 'name': v} for k, v in UNIVERSE.items()],
             'capabilities': {'manual_orders': True, 'live_quote_matching': False,
-                             'ai_recommendations': False, 'ai_auto_trading': False}})
+                             'ai_recommendations': bool(os.getenv('BAGLO_OPENAI_API_KEY') or os.getenv('BAGLO_OPENAI_SECRET_ARN')), 'ai_auto_trading': os.getenv('BAGLO_AI_SCHEDULE')=='ENABLED', 'ai_paper_workflow': True}})
     account = event.get('requestContext', {}).get('authorizer', {}).get('jwt', {}).get('claims', {}).get('sub')
     if not account:
         return response(401, {'error': '請先登入'})
@@ -64,6 +67,9 @@ def handler(event, context):
             if low is not None and high is not None and low > high:
                 raise DomainError('最低價格不能高於最高價格')
             return response(200, get_markets().search(params.get('q', ''), low, high))
+        if method == 'GET' and path == '/api/ai':
+            from .ai import status
+            return response(200,status(get_store().read(account)))
         parts = path.strip('/').split('/')
         if method == 'GET' and len(parts) == 3 and parts[:2] == ['api', 'market']:
             params = event.get('queryStringParameters') or {}
@@ -78,6 +84,9 @@ def handler(event, context):
         if method == 'GET' and len(parts) == 3 and parts[:2] == ['api', 'research']:
             service = get_markets()
             return response(200, {'symbol': parts[2], 'fundamentals': service.fundamentals(parts[2]), 'ownership': service.ownership(parts[2])})
+        if method == 'GET' and path == '/api/portfolio':
+            from .portfolio import portfolio
+            return response(200, portfolio(get_store().read(account), get_markets()))
         if method == 'GET' and path == '/api/account':
             return response(200, get_store().read(account))
         raw = event.get('body') or '{}'
@@ -88,6 +97,15 @@ def handler(event, context):
         body = json.loads(raw)
         if not isinstance(body, dict):
             raise DomainError('請求內容必須為 JSON object')
+        if method == 'PUT' and path == '/api/ai/settings':
+            from .ai import save_settings
+            return response(200,get_store().mutate(account,lambda state:save_settings(state,body)))
+        if method == 'POST' and path == '/api/ai/jobs':
+            from .ai import enqueue
+            return response(202,enqueue(get_store(),get_markets(),account,body.get('symbol')))
+        if method == 'POST' and len(parts)==5 and parts[:3]==['api','ai','jobs'] and parts[4]=='execute':
+            from .ai import execute
+            return response(200,execute(get_store(),get_markets(),account,parts[3]))
         if method == 'POST' and path == '/api/orders':
             headers = {k.lower(): v for k, v in event.get('headers', {}).items()}
             key = headers.get('idempotency-key')
@@ -107,7 +125,7 @@ def handler(event, context):
         if method == 'GET' and path == '/api/analysis':
             return response(200, {'status': 'not_configured', 'technical': None, 'fundamental': None,
                 'ownership': None, 'recommendations': [],
-                'reason': '官方資料可在研究室查閱；AI 分析與自動交易尚未啟用。'})
+                'reason': '舊版相容端點；AI 模型設定、分析工作與建議請使用 /api/ai。'})
         return response(404, {'error': '找不到此功能'})
     except DataUnavailable as exc:
         return response(503, {'error': str(exc), 'retryable': True})

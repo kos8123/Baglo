@@ -1,9 +1,6 @@
-name: Baglo CI and deployment
+name: Optional manual checks (deployment is AWS CodePipeline)
 on:
-  push:
-    branches: [dev, main]
-  pull_request:
-    branches: [dev, main]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -20,41 +17,7 @@ jobs:
       - run: pnpm --dir frontend install --frozen-lockfile
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m pytest -q
-      - run: node --experimental-strip-types --test tests/chart-data.test.ts
-      - run: cfn-lint infra/template.yaml infra/bootstrap.yaml
+      - run: node --experimental-strip-types --test tests/*.test.ts
+      - run: cfn-lint infra/template.yaml infra/bootstrap.yaml infra/codepipeline.yaml
       - run: python scripts/build_frontend.py
       - run: bash -n scripts/deploy.sh
-  deploy:
-    needs: test
-    if: >-
-      github.event_name == 'push' &&
-      ((github.ref == 'refs/heads/dev' && vars.BAGLO_DEV_ROLE_ARN != '') ||
-       (github.ref == 'refs/heads/main' && vars.BAGLO_PROD_ROLE_ARN != ''))
-    runs-on: ubuntu-latest
-    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
-    concurrency:
-      group: baglo-deploy-${{ github.ref_name }}
-      cancel-in-progress: false
-    permissions:
-      contents: read
-      id-token: write
-    env:
-      AWS_REGION: us-east-1
-      BAGLO_FUGLE_SECRET_ARN: ${{ github.ref == 'refs/heads/main' && vars.BAGLO_PROD_FUGLE_SECRET_ARN || vars.BAGLO_DEV_FUGLE_SECRET_ARN }}
-      BAGLO_ARTIFACT_BUCKET: ${{ github.ref == 'refs/heads/main' && vars.BAGLO_PROD_ARTIFACT_BUCKET || vars.BAGLO_DEV_ARTIFACT_BUCKET }}
-      BAGLO_CFN_ROLE_ARN: ${{ github.ref == 'refs/heads/main' && vars.BAGLO_PROD_CFN_ROLE_ARN || vars.BAGLO_DEV_CFN_ROLE_ARN }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: '3.12'}
-      - uses: actions/setup-node@v4
-        with: {node-version: '24'}
-      - uses: pnpm/action-setup@v4
-        with: {version: '11.25.0'}
-      - run: pnpm --dir frontend install --frozen-lockfile
-      - uses: aws-actions/setup-sam@v2
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ github.ref == 'refs/heads/main' && vars.BAGLO_PROD_ROLE_ARN || vars.BAGLO_DEV_ROLE_ARN }}
-          aws-region: us-east-1
-      - run: bash scripts/deploy.sh "${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}"

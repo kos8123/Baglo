@@ -1,0 +1,24 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      python: '3.12'
+      nodejs: '22'
+    commands:
+      - npm install -g pnpm@11.25.0
+      - pnpm --dir frontend install --frozen-lockfile
+      - python -m pip install -r requirements-dev.txt
+  build:
+    commands:
+      - python -m pytest -q
+      - node --experimental-strip-types --test tests/*.test.ts
+      - cfn-lint infra/template.yaml infra/bootstrap.yaml infra/codepipeline.yaml
+      - python scripts/build_frontend.py
+      - bash -n scripts/deploy.sh scripts/setup_codepipeline.sh
+artifacts:
+  files:
+    - 'backend/**/*'
+    - 'infra/**/*'
+    - 'scripts/**/*'
+    - 'dist/**/*'
+    - 'buildspec-deploy.yml'

@@ -1,0 +1,11 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      python: '3.12'
+    commands:
+      - python -m pip install aws-sam-cli
+  build:
+    commands:
+      - export BAGLO_PREBUILT_FRONTEND=1
+      - bash scripts/deploy.sh "$BAGLO_ENVIRONMENT"

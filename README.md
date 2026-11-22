@@ -16,9 +16,9 @@
 - 本機 SQLite 持久化；Lambda 使用 DynamoDB 條件寫入，避免並行修改覆蓋帳本。
 - 本機限定的沙盒成交，用輸入限價驗證帳務；明確標示為非真實行情。
 - AWS SAM 模板：Lambda、HTTP API、Cognito、DynamoDB、私人 S3、CloudFront、排程與日誌。
-- GitHub Actions：測試、TypeScript 檢查、IaC 驗證、Vite 靜態建置；完成 AWS bootstrap 後可依分支自動部署。
+- AWS CodePipeline 設定檔：dev／main 分流、CodeBuild 驗證、正式區人工核准、部署 Lambda + S3；目前依要求不建立或啟用 AWS 資源。
 
-**目前沒有行情驅動的自動撮合、OpenAI 呼叫或 AI 自動交易。** 研究室已能查看基礎官方資料，但不代表完整財報分析或 AI 判斷；部署版委託仍保持待成交。排程預設停用；啟用後目前只寫入「資料未就緒」稽核報告，不產生交易。所有帳戶均為模擬，不連接券商。
+**目前仍沒有行情驅動的自動撮合。** 已加入 AI 三面向分析背景工作、推薦採用、每日自動模擬設定及保存紀錄，但需另設 OpenAI 後端金鑰才能呼叫模型；本機沒有每日排程。雲端日程的 IaC 已備妥但尚未部署或啟用，且帳戶必須加入排程名單及自行開啟授權。AI 建議只會透過獨立風控建立待成交模擬委託，不送券商真單、不把舊價假設為成交價。
 
 視覺方向參考 [RonDesignLab 的 E*TRADE 設計](https://dribbble.com/shots/21333645-E-TRADE-Online-Trading-Platform)：深色交易終端、低彩度邊框、三欄工作區與紅買綠賣按鈕；保留 Baglo 品牌，自行實作元件，沒有使用參考圖的品牌素材。
 
@@ -113,58 +113,37 @@ flowchart TD
 
 帳本 MVP 最多 150 筆委託／300 KB，達上限明確拒絕新委託，不刪除舊紀錄；下一階段改為獨立委託／成交項目與交易寫入。S3、資料表、使用者池刪除 stack 後保留，仍可能計費。DynamoDB PITR、CloudFront、Cognito、日誌與 CI 分鐘也需依帳號額度估費；此模板不保證全部免費。
 
-## CI/CD 與首次設定
+## AWS CodePipeline（僅準備設定，目前不啟用）
 
 ```mermaid
 flowchart LR
-    Feature[feature 分支] --> PR[Pull Request / 測試]
-    PR --> Dev[合併 dev]
-    Dev --> DevCI[測試、語法、IaC、建置]
-    DevCI --> DevDeploy[OIDC 部署 baglo-dev]
-    Dev --> Review[PR 至 main]
-    Review --> MainCI[再次測試與建置]
-    MainCI --> ProdDeploy[OIDC 部署 baglo-prod]
+    Dev[GitHub dev] --> DevSource[CodeConnections]
+    DevSource --> DevCheck[CodeBuild: Python / TypeScript / IaC / Vite]
+    DevCheck --> DevDeploy[部署同一份已驗證產物至測試區]
+    Main[GitHub main] --> ProdSource[CodeConnections]
+    ProdSource --> ProdCheck[CodeBuild 驗證]
+    ProdCheck --> Approval[人工核准此 revision]
+    Approval --> ProdDeploy[部署同一份已驗證產物至正式區]
 ```
 
-所有推送與 PR 都執行 CI。AWS 部署只有在相應 repository variable 設定後啟用；目前尚未在 AWS 建立新資源或設定 GitHub variables。CloudFormation bootstrap、Cognito 真實登入與部署後端到端尚待 AWS 實測。
+`infra/codepipeline.yaml` 每個環境各建一條 Pipeline，環境資料、網站及使用者池獨立。V2 採 QUEUED；驗證專案不能部署，部署專案使用指定部署角色。建置成功的前端產物直接晉升，不重新抓新 commit 或重編前端。GitHub Actions 僅保留手動檢查，不再因 push 重複部署。
 
-### 1. 首次 AWS bootstrap
+**使用者要求目前不使用 AWS，所以本次沒有執行下方部署指令、建立資源或啟用排程。** 準備統一部署時，先確認 main 與 dev 都有本次程式，再檢視 `infra/bootstrap.yaml` 與 `infra/codepipeline.yaml` 的角色與費用。CodeBuild、Pipeline、日誌、秘密管理與模型都可能計費，不保證完全免費。
 
-在已登入、具資源建立權限的 AWS CloudShell，從此 repository 根目錄執行。先檢視 `infra/bootstrap.yaml`：它建立 GitHub OIDC 部署角色、CloudFormation 執行角色及 artifact bucket，**會建立 IAM 權限與可能計費的資源**。CloudFormation 執行角色的 CloudFront 及部分建立 API 權限為服務範圍，其他角色與多數資源限制在指定環境；適合獨立練習帳號，正式組織應再套用 permissions boundary。
-
-帳號若已有 `token.actions.githubusercontent.com` OIDC provider，須以 `ExistingOidcProviderArn` 傳入既有 ARN，不可重建同一 provider。
+日後可在已登入的 CloudShell checkout 此專案 dev 分支後執行：
 
 ```bash
-aws cloudformation deploy --region us-east-1 \
-  --template-file infra/bootstrap.yaml --stack-name baglo-bootstrap-dev \
-  --capabilities CAPABILITY_IAM \
-  --parameter-overrides Environment=dev Repository=kos8123/Baglo
-
-aws cloudformation describe-stacks --region us-east-1 \
-  --stack-name baglo-bootstrap-dev --query 'Stacks[0].Outputs'
+# 僅在決定統一部署後執行；Connection 必須同區域、AVAILABLE，且可讀 kos8123/Baglo。
+bash scripts/setup_codepipeline.sh '<GitHub Connection ARN>'
 ```
 
-正式環境重複建立 `baglo-bootstrap-prod`，傳入 `Environment=prod` 及第一個 stack 輸出的 `ExistingOidcProviderArn=...`。不要直接執行原 CloudQuant 的部署腳本或修改原 stack。
+腳本僅建立／更新 Baglo 的 bootstrap 與 pipeline stacks，不碰舊 CloudQuant。預設區域 us-east-1；已有 bootstrap 時保留原 OIDC 參數。尚未做 AWS 端實測。若產物桶另外啟用了 S3 versioning，部署角色需另行審查物件版本讀取權限，本次未增加該授權。
 
-### 2. GitHub 設定
+可選的後端設定為 `BAGLO_FUGLE_SECRET_ARN`、`BAGLO_OPENAI_SECRET_ARN`、`BAGLO_OPENAI_MODEL`。秘密值僅放 Secrets Manager。未設定富果漲跌停或有效即時行情時，AI 不會建單。AI 排程另須 `BAGLO_AI_SCHEDULE=ENABLED`、`BAGLO_AI_ACCOUNTS`（允許的 Cognito sub 清單），預設全部停用。
 
-在 repository 設定 `dev`、`prod` environments，dev 僅允許 dev 分支，prod 僅允許 main 分支。角色信任限於 `kos8123/Baglo` 的指定 environment，不存放長期 AWS Access Key。
+管理者需日後在 Cognito 建立登入帳戶；不要將密碼或 token 提交至 repository。雲端不提供本機沙盒身分或成交按鈕。
 
-將各環境 bootstrap 輸出加入 **repository variables**：
-
-| Variable | 輸出 |
-|---|---|
-| `BAGLO_DEV_ROLE_ARN` / `BAGLO_PROD_ROLE_ARN` | DeployRoleArn |
-| `BAGLO_DEV_CFN_ROLE_ARN` / `BAGLO_PROD_CFN_ROLE_ARN` | CloudFormationRoleArn |
-| `BAGLO_DEV_ARTIFACT_BUCKET` / `BAGLO_PROD_ARTIFACT_BUCKET` | ArtifactBucket |
-
-設定完成後，推送 dev 自動部署測試環境，main 自動部署正式環境；同環境部署會序列化，不會互相取消。可依 GitHub 方案支援程度在 prod environment 加人工核准，但第一版不依賴此付費能力。
-
-部署腳本：`scripts/deploy.sh dev|prod`。流程為 SAM build/deploy → 靜態前端 config 建置 → S3 sync → CloudFront invalidation → 公開健康檢查與未登入帳戶應回 401 的檢查。兩個環境的資料、網站與使用者池獨立。
-
-管理者需在部署後的 Cognito 使用者池建立自己的登入帳戶；透過 Cognito 頁面完成首次密碼變更，不把密碼或 token 提交至 repository。雲端不提供本機沙盒身分或成交按鈕。
-
-## 已驗證的使用者流程
+## 使用者驗收範圍
 
 - 代號、中文名稱、全形數字、台／臺與 `.TW` 後綴搜尋；能選到原本六檔以外的上市、上櫃股票。
 - 以價格區間篩選時清除原本的已選搜尋文字；最多顯示 20 個建議，可進一步輸入名稱縮小範圍。
@@ -175,14 +154,14 @@ aws cloudformation describe-stacks --region us-east-1 \
 - 圖表只呈現實際取得的資料；上櫃歷史成交量的張／股換算有測試。
 - 來源失敗、部分市場不可用、舊快取、休市成交價與即時報價不混用；並行與重複委託維持原本帳務測試。
 
-本機使用者體驗已操作驗證；AWS 部署後的來源可達性、Secrets Manager 與登入流程仍需在雲端實測。
+本次僅進行編譯、單元與基本連線檢查；互動驗收交由使用者依 docs/ACCEPTANCE.md 執行。AWS 尚未部署。
 
 ## 下一階段
 
-1. 擴充完整財報、公告時間、歷史修訂版本與盤前資料品質檢查；已有基礎來源接入，但尚未啟用每日 AI 分析。
+1. 擴充完整財報、公告時間、歷史修訂版本與資料品質檢查，完成模型與每日排程實測。
 2. 補齊交易日、流動性、報價買賣盤單位與撮合規則，再實作行情驅動模擬成交與交割限制。
-3. OpenAI 結構化建議介面與模型評估；API 金鑰保存在後端秘密管理，失敗或缺資料即不產生交易。
-4. AI 推薦需手動確認；自動模式另設定現金、持倉與單日額度，避免與手動模式重複委託。
+3. AI 已有 OpenAI 結構化建議介面；下一步需設定金鑰、驗證模型及費用，失敗或缺資料即不建單。
+4. AI 推薦需手動確認；自動模式目前用每筆預算、信心門檻、現金／持倉及重複委託防護，尚需更完整單日曝險與市場撮合研究。
 5. 分別比較手動、固定規則及 AI 的成本後績效，不以短期沙盒結果宣稱獲利。
 
 ## AI 輔助開發紀錄
@@ -212,3 +191,15 @@ aws cloudformation describe-stacks --region us-east-1 \
 - 本機 Python 8000 埠提供 `dist/` 與 API。前端開發可另執行 `pnpm --dir frontend dev`，開啟 5173；Vite 代理 `/api` 到 8000。
 
 本次僅執行編譯、既有後端檢查與資料聚合檢查。互動與跨裝置驗收由使用者依 [驗收清單](docs/ACCEPTANCE.md) 操作；尚未宣稱所有瀏覽器操作驗收通過。
+
+## 本機 AI、Swagger 與持倉
+
+- 左側導覽加入「我的持倉」「AI 模擬交易」「Swagger API」，移除頂部重複導覽；手機保留左側圖示。
+- 持倉成本依已記錄成交採移動平均且含買進費用；缺少成本紀錄不推估。未實現損益未扣未來賣出費稅；參考估值逐筆列來源與時間，不冒充即時。
+- Swagger 位於 `/docs/index.html`，OpenAPI 位於 `/api/openapi.json`。UI 套件隨網站部署，不讀取或保存後端 API key；雲端測試只接受自己的 Cognito token。
+- 本機 `.env.local` 可另設 `BAGLO_OPENAI_API_KEY`、`BAGLO_OPENAI_MODEL`，重啟後生效。富果金鑰無法代替 OpenAI 金鑰。沒有模型金鑰仍可使用手動模擬。
+- AI 工作非同步執行，先取得公開技術／基本／籌碼快照並保存後才呼叫模型；不傳送帳戶餘額、持倉或個人資料給模型。輸出只包含動作、信心與理由，股數與價格由後端依預算重新計算。模型不得直接呼叫下單 API。
+- 每帳戶保留最近 12 筆完成工作及尚在處理工作；原始輸入快照留在本機 `data/ai-inputs/` 或雲端私人資料桶。不回填過去決策。工作逾時明示失敗，模型呼叫不自動重試。
+- 雲端預備流程：08:30 分析、09:05 重新檢查當日分析與可信即時零股報價後建模擬單；非交易時段、休市舊價、低信心、缺資料或資金／持倉不符一律跳過。排程與帳戶授權雙重停用預設。
+
+[OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)；[AWS CodePipeline](https://docs.aws.amazon.com/codepipeline/latest/userguide/pipeline-requirements.html)。本次沒有付費模型實測或 AWS 部署，不宣稱已驗證每日自動交易。

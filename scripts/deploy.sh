@@ -10,7 +10,7 @@ sam build --template-file infra/template.yaml
 sam deploy --stack-name "$STACK" --region "$AWS_REGION" \
   --s3-bucket "$BAGLO_ARTIFACT_BUCKET" --capabilities CAPABILITY_IAM \
   --role-arn "$BAGLO_CFN_ROLE_ARN" \
-  --parameter-overrides "Environment=$ENVIRONMENT" PremarketScheduleState=DISABLED "FugleSecretArn=${BAGLO_FUGLE_SECRET_ARN:-}" \
+  --parameter-overrides "Environment=$ENVIRONMENT" "PremarketScheduleState=${BAGLO_AI_SCHEDULE:-DISABLED}" "FugleSecretArn=${BAGLO_FUGLE_SECRET_ARN:-}" "OpenAISecretArn=${BAGLO_OPENAI_SECRET_ARN:-}" "OpenAIModel=${BAGLO_OPENAI_MODEL:-gpt-4.1-mini}" "AiAccounts=${BAGLO_AI_ACCOUNTS:-}" \
   --no-confirm-changeset --no-fail-on-empty-changeset
 OUTPUT_FILE=$(mktemp)
 trap 'rm -f "$OUTPUT_FILE"' EXIT
@@ -20,7 +20,11 @@ API_URL=$(read_output ApiUrl)
 BUCKET=$(read_output WebsiteBucket)
 DISTRIBUTION=$(read_output DistributionId)
 WEBSITE=$(read_output WebsiteUrl)
-python3 scripts/build_frontend.py --api-base "$API_URL"
+if [[ "${BAGLO_PREBUILT_FRONTEND:-0}" == 1 ]]; then
+  python3 scripts/configure_frontend.py --api-base "$API_URL"
+else
+  python3 scripts/build_frontend.py --api-base "$API_URL"
+fi
 # Versioned bucket retains replaced assets. Keep only these known public files.
 aws s3 sync dist/ "s3://$BUCKET/" --cache-control 'no-cache' --region "$AWS_REGION"
 INVALIDATION=$(aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths '/*' --query 'Invalidation.Id' --output text)

@@ -14,7 +14,17 @@ class LocalHandler(SimpleHTTPRequestHandler):
         if urlsplit(self.path).path.startswith('/api/'):
             self.api()
         else:
+            if urlsplit(self.path).path in ('/','/index.html','/config.json'):
+                if 'If-Modified-Since' in self.headers:del self.headers['If-Modified-Since']
             super().do_GET()
+
+    def end_headers(self):
+        if not urlsplit(self.path).path.startswith('/api/'):
+            self.send_header('Cache-Control', 'no-cache')
+        super().end_headers()
+
+    def do_PUT(self):
+        self.api()
 
     def do_POST(self):
         self.api()
@@ -50,7 +60,7 @@ def main():
     if env_file.exists():
         for line in env_file.read_text().splitlines():
             key, separator, value = line.partition('=')
-            if separator and key.strip() in {'BAGLO_FUGLE_API_KEY', 'BAGLO_LOCAL_DB', 'BAGLO_MARKET_CACHE'}:
+            if separator and key.strip() in {'BAGLO_FUGLE_API_KEY', 'BAGLO_LOCAL_DB', 'BAGLO_MARKET_CACHE', 'BAGLO_OPENAI_API_KEY', 'BAGLO_OPENAI_MODEL'}:
                 os.environ.setdefault(key.strip(), value.strip().strip(chr(34)).strip(chr(39)))
     os.environ['BAGLO_DEMO'] = '1' if args.demo else '0'
     print(f'Baglo http://127.0.0.1:{args.port} — local only; demo fills={args.demo}', flush=True)

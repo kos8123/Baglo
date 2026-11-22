@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Minus, Plus, RefreshCw, ShieldCheck } from "lucide-react";
-import { api, dateLabel, money, tick } from "../lib";
+import { api, submitPaperOrder, dateLabel, money, tick } from "../lib";
 import type {
   Account,
   Config,
@@ -149,18 +149,20 @@ export function OrderTicket({
     );
   };
   const submit = useMutation({
-    mutationFn: (item: Review) =>
-      api("/orders", {
-        method: "POST",
-        headers: { "Idempotency-Key": item.key },
-        body: item.payload,
-      }),
-    onSuccess: () => {
+    mutationFn: (item: Review) => submitPaperOrder(item),
+    onSuccess: (accepted) => {
+      setError("");
+      client.setQueryData<Account>(["account"], (old) =>
+        old && !old.orders.some((o) => o.id === accepted.id)
+          ? { ...old, orders: [...old.orders, accepted] }
+          : old,
+      );
       pending.current = null;
       setReview(null);
       onAccepted();
       notify("委託已送出，請至委託紀錄查詢；尚未成交。");
       void client.invalidateQueries({ queryKey: ["account"] });
+      void client.invalidateQueries({ queryKey: ["portfolio"] });
     },
     onError: (e: Error) => {
       setError(e.message);

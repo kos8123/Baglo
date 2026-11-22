@@ -150,12 +150,10 @@ export function PriceChart({
       if (userView.current && prior)
         chart.current.timeScale().setVisibleRange(prior);
       else
-        chart.current
-          .timeScale()
-          .setVisibleLogicalRange({
-            from: Math.max(0, data.length - defaults[period]) - 0.5,
-            to: data.length + 2,
-          });
+        chart.current.timeScale().setVisibleLogicalRange({
+          from: Math.max(0, data.length - defaults[period]) - 0.5,
+          to: data.length + 2,
+        });
     }
   }, [data, symbol, period]);
   const zoom = (factor: number) => {
@@ -171,12 +169,10 @@ export function PriceChart({
   };
   const reset = () => {
     userView.current = false;
-    chart.current
-      ?.timeScale()
-      .setVisibleLogicalRange({
-        from: Math.max(0, data.length - defaults[period]) - 0.5,
-        to: data.length + 2,
-      });
+    chart.current?.timeScale().setVisibleLogicalRange({
+      from: Math.max(0, data.length - defaults[period]) - 0.5,
+      to: data.length + 2,
+    });
   };
   return (
     <section className="chart-panel">

@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import type { Config } from "./types";
+import type { Account, Order, Config } from "./types.ts";
 export const cn = (...values: ClassValue[]) => twMerge(clsx(values));
 export const money = (value: number | null | undefined) =>
   value == null
@@ -34,6 +34,15 @@ export const dateLabel = (value?: string) => {
 };
 export const tick = (price: number, config: Config) =>
   config.price_ticks.find((b) => b.below === null || price < b.below)!.tick;
+export class ApiError extends Error {
+  status: number;
+  uncertain: boolean;
+  constructor(message: string, status: number, uncertain = false) {
+    super(message);
+    this.status = status;
+    this.uncertain = uncertain;
+  }
+}
 let apiBase = "";
 export async function api<T>(
   path: string,
@@ -55,22 +64,56 @@ export async function api<T>(
     });
   } catch (e) {
     if (options.signal?.aborted) throw e;
-    throw new Error("連線逾時或網路中斷，請稍後重試；勿重複建立委託。");
+    throw new ApiError("無法確認伺服器回應，請查詢委託狀態", 0, true);
   }
   let data;
   try {
     data = await response.json();
   } catch {
-    throw new Error("服務回應格式錯誤，請稍後重試");
+    throw new ApiError(
+      "服務回應無法讀取，請查詢委託狀態",
+      response.status,
+      true,
+    );
   }
   if (!response.ok) {
     if (response.status === 401) {
       sessionStorage.removeItem("baglo_token");
       window.dispatchEvent(new Event("baglo-unauthorized"));
     }
-    throw new Error(data.error || "服務暫時無法使用");
+    throw new ApiError(
+      data.error || "服務暫時無法使用",
+      response.status,
+      response.status >= 500,
+    );
   }
   return data;
+}
+export async function submitPaperOrder(item: {
+  key: string;
+  payload: string;
+}): Promise<Order> {
+  try {
+    return await api<Order>("/orders", {
+      method: "POST",
+      headers: { "Idempotency-Key": item.key },
+      body: item.payload,
+    });
+  } catch (error) {
+    if (!(error instanceof ApiError) || !error.uncertain) throw error;
+    try {
+      const snapshot = await api<Account>("/account");
+      const accepted = snapshot.orders.find((o) => o.id === item.key);
+      if (accepted) return accepted;
+    } catch {
+      /* Status stays uncertain; never infer failure from a read error. */
+    }
+    throw new ApiError(
+      "未能確認是否已受理，請先至委託紀錄查詢；再次確認會沿用同一請求編號。",
+      0,
+      true,
+    );
+  }
 }
 const b64 = (buffer: ArrayBuffer | Uint8Array) =>
   btoa(String.fromCharCode(...new Uint8Array(buffer)))

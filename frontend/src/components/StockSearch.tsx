@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, X } from "lucide-react";
+import { matchesInstrument } from "../selection";
 import { api, money } from "../lib";
 import type { Instrument, SearchResult } from "../types";
 import { Button } from "./ui/button";
@@ -25,6 +26,7 @@ export function StockSearch({
   const box = useRef<HTMLDivElement>(null),
     input = useRef<HTMLInputElement>(null);
   const label = selected.symbol + " " + selected.name;
+  const matchesSelected = (value: string) => matchesInstrument(value, selected);
   useEffect(() => {
     setText(label);
     setOpen(false);
@@ -69,6 +71,16 @@ export function StockSearch({
     setText(item.symbol + " " + item.name);
     onDirty(false);
   };
+  useEffect(() => {
+    if (
+      open &&
+      !composing &&
+      debounced === search &&
+      items.length === 1 &&
+      matchesInstrument(text, items[0])
+    )
+      choose(items[0]);
+  }, [result.data, debounced, search, open, composing]);
   const filter = (which: "low" | "high", value: string) => {
     which === "low" ? setLow(value) : setHigh(value);
     if (text === label) setText("");
@@ -100,7 +112,7 @@ export function StockSearch({
           onCompositionEnd={() => setComposing(false)}
           onChange={(e) => {
             setText(e.target.value);
-            onDirty(true);
+            onDirty(!matchesSelected(e.target.value));
             setOpen(true);
             setActive(-1);
           }}
