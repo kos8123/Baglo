@@ -528,7 +528,9 @@ function Terminal({ config }: { config: Config }) {
                 rel="noreferrer"
               >
                 Copyright (с) 2025 TradingView, Inc.
-              </a>
+              </a>{" "}
+              · <a href="/privacy.html">隱私權政策</a>{" "}
+              · <a href="/terms.html">服務條款</a>
             </span>
             <span>純模擬交易・初始虛擬本金 300,000 元・不提供真實委託</span>
           </footer>
