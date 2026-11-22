@@ -10,6 +10,14 @@ chmod 600 "$TMP_SECRET"
 trap 'rm -f "$TMP_SECRET"' EXIT
 for PROVIDER in gemini fugle; do
   SECRET_NAME="baglo/$TARGET_ENV/$PROVIDER"
+  if [[ "${BAGLO_SKIP_EXISTING_SECRETS:-0}" == 1 ]]; then
+    EXISTING_ARN=$(aws secretsmanager describe-secret --secret-id "$SECRET_NAME" --region "$AWS_REGION" --query ARN --output text 2>/dev/null || true)
+    if [[ -n "$EXISTING_ARN" && "$EXISTING_ARN" != None ]]; then
+      LABEL=$(printf '%s_%s' "$TARGET_ENV" "$PROVIDER" | tr '[:lower:]' '[:upper:]')
+      printf 'export BAGLO_%s_SECRET_ARN=%q\n' "$LABEL" "$EXISTING_ARN"
+      continue
+    fi
+  fi
   read -r -s -p "Enter $TARGET_ENV $PROVIDER API key (hidden): " API_VALUE < /dev/tty
   printf '\n' > /dev/tty
   [[ -n "$API_VALUE" ]] || { echo 'Empty key rejected'; exit 1; }

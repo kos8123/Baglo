@@ -30,3 +30,32 @@ elif args[:2]==['cloudformation','describe-stacks']:
     assert 'FugleSecretArn=arn:fixture-fugle' in pipeline
     assert 'GeminiModel=fixture-model' in pipeline
     assert 'AiSchedule=DISABLED' in pipeline
+
+
+def test_cloudshell_pending_connection_resumes_without_duplicate_resources(tmp_path):
+    fake=tmp_path/'aws'
+    fake.write_text('#!'+sys.executable+'\n'+'''
+import json,os,sys
+args=sys.argv[1:]
+path=os.environ['BAGLO_TEST_CAPTURE']
+try:
+    prior=[json.loads(line) for line in open(path)]
+except FileNotFoundError:prior=[]
+with open(path,'a') as stream:stream.write(json.dumps(args)+'\\n')
+arn='arn:aws:codeconnections:us-east-1:123456789012:connection/fixture'
+if args[:2]==['sts','get-caller-identity']:print('fixture account')
+elif args[:2]==['codeconnections','list-connections']:print(json.dumps([arn] if any(x[:2]==['codeconnections','create-connection'] for x in prior) else []))
+elif args[:2]==['codeconnections','create-connection']:print(arn)
+elif args[:2]==['codeconnections','get-connection']:print('PENDING')
+else:raise SystemExit('Unexpected mutation while connection is pending')
+''')
+    fake.chmod(0o755)
+    env=os.environ.copy();capture=tmp_path/'pending.jsonl'
+    env.update(PATH=str(tmp_path)+os.pathsep+env['PATH'],BAGLO_TEST_CAPTURE=str(capture),AWS_REGION='us-east-1')
+    script=Path(__file__).resolve().parents[1]/'scripts/cloudshell_start.sh'
+    for _ in range(2):
+        result=subprocess.run(['bash',str(script),'dev'],env=env,check=True,capture_output=True,text=True)
+        assert 'PENDING' in result.stdout
+    calls=[json.loads(line) for line in capture.read_text().splitlines()]
+    assert sum(c[:2]==['codeconnections','create-connection'] for c in calls)==1
+    assert not any(c[0] in ('cloudformation','secretsmanager') for c in calls)

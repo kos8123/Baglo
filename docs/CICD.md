@@ -30,6 +30,10 @@ flowchart LR
 - CloudFormation 也隨已驗證的 Git 版本更新。第一次建立信任角色與 pipeline 需在 CloudShell 執行一次；之後日常 push 不需重新安裝。
 - AWS 沒有真正免費或無上限的承諾：CodeBuild、CodePipeline、Secrets Manager、儲存、模型皆可能計費。先只建 dev，排程預設停用。
 
+## 一支腳本接續建立
+
+在已登入的 AWS CloudShell、repo dev 分支根目錄執行 `bash scripts/cloudshell_start.sh dev`。它會重用或建立專用 `baglo-github` 連線；若仍 PENDING，提供瀏覽器授權連結後停止，不建立 pipeline。完成 GitHub 授權後重跑同一命令，會重用既有金鑰、建立缺少的金鑰，再接續 bootstrap／pipeline。只針對 Baglo，不修改舊 CloudQuant 資源。
+
 ## 第一次設定（AWS CloudShell）
 
 開啟 **us-east-1** 的 CloudShell，取得 repo 的 dev 分支。私人 repo 請使用你既有的 GitHub 登入或上傳原始碼；不要把 PAT、AWS AK/SK 放進 repo。

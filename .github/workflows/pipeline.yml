@@ -22,4 +22,4 @@ jobs:
       - run: node --experimental-strip-types --test tests/*.test.ts
       - run: cfn-lint infra/template.yaml infra/bootstrap.yaml infra/codepipeline.yaml
       - run: python scripts/build_frontend.py
-      - run: bash -n scripts/deploy.sh scripts/setup_codepipeline.sh scripts/setup_secrets.sh
+      - run: bash -n scripts/deploy.sh scripts/setup_codepipeline.sh scripts/setup_secrets.sh scripts/cloudshell_start.sh
