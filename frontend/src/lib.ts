@@ -137,12 +137,16 @@ export async function login(config: Config) {
   sessionStorage.setItem("baglo_verifier", verifier);
   sessionStorage.setItem("baglo_oauth_state", state);
   const url = new URL(config.auth_domain + "/oauth2/authorize");
+  const redirect = new URL(
+    location.pathname.endsWith("/terminal.html") ? "/terminal.html" : "/",
+    location.origin,
+  ).toString();
   url.search = new URLSearchParams({
     client_id: config.client_id,
     response_type: "code",
     lang: "zh-TW",
     scope: "openid baglo-api/access",
-    redirect_uri: location.origin + "/",
+    redirect_uri: redirect,
     state,
     code_challenge_method: "S256",
     code_challenge: b64(
@@ -173,13 +177,17 @@ export function initialize() {
     const config = await api<Config>("/config");
     const query = new URLSearchParams(location.search);
     if (query.has("error")) {
-      history.replaceState(null, "", "/");
+      history.replaceState(null, "", location.pathname);
       throw new Error("登入未完成，請重新登入");
     }
     if (query.has("code")) {
+      const redirect = new URL(
+        location.pathname.endsWith("/terminal.html") ? "/terminal.html" : "/",
+        location.origin,
+      ).toString();
       const state = sessionStorage.getItem("baglo_oauth_state"),
         verifier = sessionStorage.getItem("baglo_verifier");
-      history.replaceState(null, "", "/");
+      history.replaceState(null, "", location.pathname);
       sessionStorage.removeItem("baglo_oauth_state");
       sessionStorage.removeItem("baglo_verifier");
       if (!state || state !== query.get("state") || !verifier)
@@ -191,7 +199,7 @@ export function initialize() {
           grant_type: "authorization_code",
           client_id: config.client_id,
           code: query.get("code")!,
-          redirect_uri: location.origin + "/",
+          redirect_uri: redirect,
           code_verifier: verifier,
         }),
       });

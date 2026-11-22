@@ -12,7 +12,7 @@ sam build --template-file infra/template.yaml
 PARAMETERS=("Environment=$ENVIRONMENT" "PremarketScheduleState=${BAGLO_AI_SCHEDULE:-DISABLED}" "GeminiModel=${BAGLO_GEMINI_MODEL:-gemini-3.5-flash-lite}" "ReleaseId=$RELEASE" "OpenAIModel=${BAGLO_OPENAI_MODEL:-gpt-4.1-mini}")
 # SAM rejects Key= with an empty value. Omitted optional values use template defaults
 # on first deployment and preserve existing parameters on subsequent deployments.
-for PAIR in "GoogleOAuthSecretArn=${BAGLO_GOOGLE_OAUTH_SECRET_ARN:-}" "GoogleOAuthSecretVersion=${BAGLO_GOOGLE_OAUTH_SECRET_VERSION:-}" "FugleSecretArn=${BAGLO_FUGLE_SECRET_ARN:-}" "GeminiSecretArn=${BAGLO_GEMINI_SECRET_ARN:-}" "OpenAISecretArn=${BAGLO_OPENAI_SECRET_ARN:-}" "AiAccounts=${BAGLO_AI_ACCOUNTS:-}"; do
+for PAIR in "FrontendUrl=${BAGLO_FRONTEND_URL:-}" "GoogleOAuthSecretArn=${BAGLO_GOOGLE_OAUTH_SECRET_ARN:-}" "GoogleOAuthSecretVersion=${BAGLO_GOOGLE_OAUTH_SECRET_VERSION:-}" "FugleSecretArn=${BAGLO_FUGLE_SECRET_ARN:-}" "GeminiSecretArn=${BAGLO_GEMINI_SECRET_ARN:-}" "OpenAISecretArn=${BAGLO_OPENAI_SECRET_ARN:-}" "AiAccounts=${BAGLO_AI_ACCOUNTS:-}"; do
   [[ -z "${PAIR#*=}" ]] || PARAMETERS+=("$PAIR")
 done
 ROLLBACK_OPTIONS=()
@@ -65,4 +65,17 @@ allowed={x.strip().lower() for x in headers.get('access-control-allow-headers','
 if not {'authorization','content-type','idempotency-key'}<=allowed:raise SystemExit('CORS request headers missing')
 PYCORS
 rm -f "$PREFLIGHT_HEADERS"
+if [[ -n "${BAGLO_FRONTEND_URL:-}" ]]; then
+  PREFLIGHT_HEADERS=$(mktemp)
+  PREFLIGHT_STATUS=$(curl --silent --show-error --max-time 15 --request OPTIONS --header "Origin: $BAGLO_FRONTEND_URL" --header 'Access-Control-Request-Method: POST' --header 'Access-Control-Request-Headers: authorization,content-type,idempotency-key' --dump-header "$PREFLIGHT_HEADERS" --output /dev/null --write-out '%{http_code}' "$API_URL/api/orders")
+  python3 - "$PREFLIGHT_HEADERS" "$PREFLIGHT_STATUS" "$BAGLO_FRONTEND_URL" <<'PYCORS'
+import sys
+from email.parser import Parser
+raw=open(sys.argv[1]).read().split('\n',1)[1]
+headers=Parser().parsestr(raw)
+if sys.argv[2] not in ('200','204'):raise SystemExit('Cloudflare CORS preflight failed: '+sys.argv[2])
+if headers.get('access-control-allow-origin')!=sys.argv[3]:raise SystemExit('Cloudflare CORS origin mismatch')
+PYCORS
+  rm -f "$PREFLIGHT_HEADERS"
+fi
 echo "Deployed $ENVIRONMENT commit $RELEASE: $WEBSITE"

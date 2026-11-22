@@ -529,6 +529,7 @@ function Terminal({ config }: { config: Config }) {
               >
                 Copyright (с) 2025 TradingView, Inc.
               </a>{" "}
+              · <a href="/">關於 Baglo</a>{" "}
               · <a href="/privacy.html">隱私權政策</a>{" "}
               · <a href="/terms.html">服務條款</a>
             </span>

@@ -4,7 +4,7 @@
 
 ## 目前可以做什麼
 
-- React + TypeScript + Vite 靜態響應式前端：交易工作台、官方研究資料、委託紀錄。
+- React + TypeScript + Vite 靜態響應式前端：Cloudflare Pages 品牌首頁、交易工作台、官方研究資料、委託紀錄與公開法律頁面。
 - 以代號、名稱搜尋上市櫃普通股，提供收盤價區間篩選、鍵盤選取與清除條件。
 - 富果整股／零股分開報價；未設定金鑰或來源失敗時顯示官方最近收盤參考，不冒充現價。
 - 選股自動帶入參考價；改價後更新報價不覆蓋自訂限價，提供升降單位加減鍵與送出前確認。
@@ -15,12 +15,12 @@
 - 重複請求防護、禁止放空；不設單筆金額上限，仍檢查現金與持倉。
 - 本機 SQLite 持久化；Lambda 使用 DynamoDB 條件寫入，避免並行修改覆蓋帳本。
 - 本機限定的沙盒成交，用輸入限價驗證帳務；明確標示為非真實行情。
-- AWS SAM 模板：Lambda、HTTP API、Cognito、DynamoDB、私人 S3、CloudFront、排程與日誌。
+- AWS SAM 模板：Lambda、HTTP API、Cognito、DynamoDB、私人 S3、備援 CloudFront、排程與日誌；Cloudflare Pages 為主要前端。
 - AWS CodePipeline 設定檔：dev／main 分流、CodeBuild 驗證、正式區人工核准、部署 Lambda + S3；已建立 dev CI/CD；應用上線狀態以 AWS pipeline 與 CloudFormation 結果為準。詳見 [CI/CD 部署說明](docs/CICD.md)。
 
 **目前仍沒有行情驅動的自動撮合。** 已整合 AI 自動交易頁：Gemini 產生有限規則策略、凍結參數、驗證排名、保留測試區間與當日三面向決策。本機每日排程只在服務運行且帳戶啟用時執行；雲端的逐檔背景工作與排程 IaC 已備妥，登入後的功能仍需實際驗收。AI 只透過獨立風控建立待成交模擬委託，不送券商真單。自動撮合、多部位再平衡與完整持倉退出流程仍待完成。
 
-[雲端開發、CodePipeline 架構與 CloudShell 設定](docs/CICD.md)；支援 Codespaces 的 `.devcontainer` 已加入。
+[雲端開發、CodePipeline 架構與 CloudShell 設定](docs/CICD.md)、[Cloudflare Pages 前端部署](docs/CLOUDFLARE_PAGES.md)；支援 Codespaces 的 `.devcontainer` 已加入。
 
 視覺方向參考 [RonDesignLab 的 E*TRADE 設計](https://dribbble.com/shots/21333645-E-TRADE-Online-Trading-Platform)：深色交易終端、低彩度邊框、三欄工作區與紅買綠賣按鈕；保留 Baglo 品牌，自行實作元件，沒有使用參考圖的品牌素材。
 

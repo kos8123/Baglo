@@ -21,8 +21,14 @@ Parameters:
     Description: Optional existing Secrets Manager secret ARN; never the API key itself
   GoogleOAuthSecretArn: {Type: String, Default: '', Description: 'Secret JSON: client_id, client_secret, allowed_emails (comma-separated)'}
   GoogleOAuthSecretVersion: {Type: String, Default: ''}
+  FrontendUrl:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^https://[A-Za-z0-9.-]+$'
+    Description: Optional Cloudflare Pages or custom frontend origin without a trailing slash
 Conditions:
   HasGoogle: !And [!Not [!Equals [!Ref GoogleOAuthSecretArn, '']], !Not [!Equals [!Ref GoogleOAuthSecretVersion, '']]]
+  HasExternalFrontend: !Not [!Equals [!Ref FrontendUrl, '']]
   HasGeminiSecret: !Not [!Equals [!Ref GeminiSecretArn, '']]
   HasOpenAISecret: !Not [!Equals [!Ref OpenAISecretArn, '']]
   HasFugleSecret: !Not [!Equals [!Ref FugleSecretArn, '']]
@@ -228,8 +234,12 @@ Resources:
       AllowedOAuthFlows: [code]
       AllowedOAuthScopes: [openid, baglo-api/access]
       SupportedIdentityProviders: [COGNITO, !If [HasGoogle, !Ref GoogleProvider, !Ref AWS::NoValue]]
-      CallbackURLs: [!Sub 'https://${Distribution.DomainName}/']
-      LogoutURLs: [!Sub 'https://${Distribution.DomainName}/']
+      CallbackURLs:
+        - !Sub 'https://${Distribution.DomainName}/'
+        - !If [HasExternalFrontend, !Sub '${FrontendUrl}/terminal.html', !Ref 'AWS::NoValue']
+      LogoutURLs:
+        - !Sub 'https://${Distribution.DomainName}/'
+        - !If [HasExternalFrontend, !Sub '${FrontendUrl}/', !Ref 'AWS::NoValue']
       PreventUserExistenceErrors: ENABLED
       EnableTokenRevocation: true
       AccessTokenValidity: 1
@@ -360,7 +370,9 @@ Resources:
     Properties:
       StageName: '$default'
       CorsConfiguration:
-        AllowOrigins: [!Sub 'https://${Distribution.DomainName}']
+        AllowOrigins:
+          - !Sub 'https://${Distribution.DomainName}'
+          - !If [HasExternalFrontend, !Ref FrontendUrl, !Ref 'AWS::NoValue']
         AllowMethods: [GET, POST, PUT, OPTIONS]
         AllowHeaders: [Authorization, Content-Type, Idempotency-Key]
         MaxAge: 300

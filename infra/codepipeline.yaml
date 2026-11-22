@@ -16,6 +16,7 @@ Parameters:
   AiSchedule: {Type: String, Default: DISABLED, AllowedValues: [ENABLED, DISABLED]}
   GoogleOAuthSecretArn: {Type: String, Default: '', Description: 'Secret JSON: client_id, client_secret, allowed_emails (comma-separated)'}
   GoogleOAuthSecretVersion: {Type: String, Default: ''}
+  FrontendUrl: {Type: String, Default: '', Description: Optional Cloudflare Pages or custom frontend origin}
 Conditions:
   IsProd: !Equals [!Ref Environment, prod]
 Resources:
@@ -86,6 +87,7 @@ Resources:
           - {Name: BAGLO_OPENAI_MODEL, Value: !Ref OpenAIModel}
           - {Name: BAGLO_AI_ACCOUNTS, Value: !Ref AiAccounts}
           - {Name: BAGLO_AI_SCHEDULE, Value: !Ref AiSchedule}
+          - {Name: BAGLO_FRONTEND_URL, Value: !Ref FrontendUrl}
       TimeoutInMinutes: 30
       ConcurrentBuildLimit: 1
       LogsConfig:

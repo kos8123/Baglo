@@ -29,6 +29,8 @@ for TARGET_ENV in ${BAGLO_ENVIRONMENTS:-dev}; do
   AI_SCHEDULE=${BAGLO_AI_SCHEDULE:-$(existing_parameter AiSchedule)}
   AI_SCHEDULE=${AI_SCHEDULE:-DISABLED}
   AI_ACCOUNTS=${BAGLO_AI_ACCOUNTS-$(existing_parameter AiAccounts)}
+  FRONTEND_VAR="BAGLO_${SECRET_PREFIX}_FRONTEND_URL"
+  if [[ ${!FRONTEND_VAR+x} == x ]]; then FRONTEND_URL=${!FRONTEND_VAR}; else FRONTEND_URL=$(existing_parameter FrontendUrl); fi
   GOOGLE_VAR="BAGLO_${SECRET_PREFIX}_GOOGLE_OAUTH_SECRET_ARN"
   GOOGLE_VERSION_VAR="BAGLO_${SECRET_PREFIX}_GOOGLE_OAUTH_SECRET_VERSION"
   if [[ ${!GOOGLE_VAR+x} == x ]]; then GOOGLE_SECRET=${!GOOGLE_VAR}; else GOOGLE_SECRET=$(existing_parameter GoogleOAuthSecretArn); fi
@@ -45,6 +47,6 @@ for TARGET_ENV in ${BAGLO_ENVIRONMENTS:-dev}; do
   ROLE=$(get_output "$BOOTSTRAP" DeployRoleArn)
   CFN=$(get_output "$BOOTSTRAP" CloudFormationRoleArn)
   BUCKET=$(get_output "$BOOTSTRAP" ArtifactBucket)
-  aws cloudformation deploy --region "$AWS_REGION" --stack-name "baglo-$TARGET_ENV-pipeline" --template-file infra/codepipeline.yaml --capabilities CAPABILITY_IAM --parameter-overrides "Environment=$TARGET_ENV" "ConnectionArn=$CONNECTION_ARN" "ArtifactBucket=$BUCKET" "DeployRoleArn=$ROLE" "CloudFormationRoleArn=$CFN" "FugleSecretArn=$FUGLE_SECRET" "GoogleOAuthSecretArn=$GOOGLE_SECRET" "GoogleOAuthSecretVersion=$GOOGLE_VERSION" "GeminiSecretArn=$GEMINI_SECRET" "GeminiModel=$GEMINI_MODEL" "OpenAISecretArn=${BAGLO_OPENAI_SECRET_ARN:-}" "OpenAIModel=${BAGLO_OPENAI_MODEL:-gpt-4.1-mini}" "AiAccounts=$AI_ACCOUNTS" "AiSchedule=$AI_SCHEDULE" --no-fail-on-empty-changeset
+  aws cloudformation deploy --region "$AWS_REGION" --stack-name "baglo-$TARGET_ENV-pipeline" --template-file infra/codepipeline.yaml --capabilities CAPABILITY_IAM --parameter-overrides "Environment=$TARGET_ENV" "ConnectionArn=$CONNECTION_ARN" "ArtifactBucket=$BUCKET" "DeployRoleArn=$ROLE" "CloudFormationRoleArn=$CFN" "FugleSecretArn=$FUGLE_SECRET" "GoogleOAuthSecretArn=$GOOGLE_SECRET" "GoogleOAuthSecretVersion=$GOOGLE_VERSION" "GeminiSecretArn=$GEMINI_SECRET" "GeminiModel=$GEMINI_MODEL" "OpenAISecretArn=${BAGLO_OPENAI_SECRET_ARN:-}" "OpenAIModel=${BAGLO_OPENAI_MODEL:-gpt-4.1-mini}" "AiAccounts=$AI_ACCOUNTS" "AiSchedule=$AI_SCHEDULE" "FrontendUrl=$FRONTEND_URL" --no-fail-on-empty-changeset
   get_output "baglo-$TARGET_ENV-pipeline" ConsoleUrl
 done
