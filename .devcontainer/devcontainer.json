@@ -1,0 +1,11 @@
+{
+  "name": "Baglo cloud development",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "24" }
+  },
+  "postCreateCommand": "python -m pip install -r requirements-dev.txt && npm install -g pnpm@11.25.0 && pnpm --dir frontend install --frozen-lockfile && python scripts/build_frontend.py",
+  "forwardPorts": [8000],
+  "portsAttributes": { "8000": { "label": "Baglo development", "onAutoForward": "notify" } },
+  "remoteEnv": { "PYTHONPATH": "${containerWorkspaceFolder}/backend" }
+}

@@ -2,7 +2,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from concurrent.futures import ThreadPoolExecutor
-import hashlib,json,uuid
+import hashlib,json,uuid,os
 from . import backtest
 from .domain import DomainError,now
 
@@ -20,8 +20,7 @@ def propose(symbol,bars,model=None):
 
 def start(store,markets,account,source='manual'):
     from .ai import configured,settings,current_model
-    import os
-    if os.getenv('BAGLO_TABLE'):raise DomainError('目前策略選股研究僅啟用於本機；雲端 Worker 尚未部署',503)
+    if os.getenv('BAGLO_TABLE') and not os.getenv('BAGLO_SELECTION_WORKER'):raise DomainError('尚未設定雲端選股 Worker',503)
     if not configured():raise DomainError('請先設定模型金鑰',409)
     policy=settings(store.read(account))
     if not policy['symbols']:raise DomainError('請先加入候選股票並儲存')
@@ -35,15 +34,22 @@ def start(store,markets,account,source='manual'):
             existing=backtest.read(account,prior)
             if existing['status'] in ('queued','running') or (source=='schedule' and existing.get('day')==day):return state,existing
         backtest.write(account,job)
-        state['ai_selection_job']=job['id'];return state,job
+        state['ai_selection_job']=job['id'];state['ai_selection_claims']=[];return state,job
     result=store.mutate(account,claim)
-    if result['id']==job['id']:_pool.submit(run,account,job['id'],markets)
+    if result['id']==job['id']:
+        try:
+            if os.getenv('BAGLO_SELECTION_WORKER'):dispatch(account,job['id'],0)
+            else:_pool.submit(run,account,job['id'],markets)
+        except Exception:
+            job.update(status='failed',error='選股 Worker 無法啟動，未呼叫模型或建立委託');backtest.write(account,job)
+            return job
     return result
 
 
-def run(account,job_id,markets):
+def run(account,job_id,markets,index=None):
     job=backtest.read(account,job_id);job['status']='running';backtest.write(account,job)
-    for symbol in job['symbols']:
+    candidates=job['symbols'] if index is None else job['symbols'][index:index+1]
+    for symbol in candidates:
         try:
             markets.resolve(symbol)
             collected={}
@@ -69,6 +75,11 @@ def run(account,job_id,markets):
             row={'symbol':symbol,'status':'completed','rule':rule,'validation':validation,'benchmark':benchmark,'final_test':final,'score':m['total_return']-.5*m['max_drawdown'],'eligible':eligible,'data_sha256':frozen['data_sha256']}
         except Exception as exc:row={'symbol':symbol,'status':'failed','error':str(exc) if isinstance(exc,DomainError) else '資料或策略研究失敗；未建立委託'}
         job['results'].append(row);backtest.write(account,job)
+    if index is not None and index+1<len(job['symbols']):
+        try:dispatch(account,job_id,index+1)
+        except Exception:
+            job.update(status='failed',error='後續選股 Worker 無法啟動，停止研究、未選股或下單',completed_at=now());backtest.write(account,job)
+        return
     ranked=sorted((r for r in job['results'] if r['status']=='completed' and r['eligible']),key=lambda r:(-r['score'],r['symbol']))
     job.update(status='completed' if any(r['status']=='completed' for r in job['results']) else 'failed',selected_symbol=ranked[0]['symbol'] if ranked else None,completed_at=now())
     if job['status']=='failed':job['error']='所有候選研究失敗，保留現金'
@@ -95,3 +106,25 @@ def validate_trade(account,report_id,symbol,action):
         buy=closes[-1]>max(b['high'] for b in bars[-rule['lookback']-1:-1])
         sell=closes[-1]<mean(closes[-rule['lookback']:])
     if not (buy if action=='buy' else sell if action=='sell' else False):raise DomainError('AI 當日建議與已回測策略訊號不一致，保留現金／原持倉',409)
+
+
+def dispatch(account,job_id,index):
+    import boto3
+    result=boto3.client('lambda').invoke(FunctionName=os.environ['BAGLO_SELECTION_WORKER'],InvocationType='Event',Payload=json.dumps({'account':account,'job_id':job_id,'index':index}).encode())
+    if result.get('StatusCode')!=202:raise DomainError('雲端選股工作未被接受')
+
+
+def worker(event,context):
+    from .api import get_store,get_markets
+    account,job_id,index=event['account'],event['job_id'],event['index']
+    job=backtest.read(account,job_id)
+    if type(index) is not int or index<0 or index>=len(job['symbols']):raise DomainError('不正確的工作索引')
+    def claim(state):
+        if state.get('ai_selection_job')!=job_id:return state,False
+        claims=state.setdefault('ai_selection_claims',[])
+        if index in claims:return state,False
+        if len(job['results'])!=index or job['status'] not in ('queued','running'):return state,False
+        claims.append(index);return state,True
+    if not get_store().mutate(account,claim):return {'status':'duplicate_or_obsolete'}
+    run(account,job_id,get_markets(),index)
+    return {'status':'processed','index':index}

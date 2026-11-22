@@ -40,7 +40,7 @@ def handler(event, context):
         from .openapi import document
         return response(200, document())
     if path == '/api/health' and method == 'GET':
-        return response(200, {'ok': True, 'service': 'Baglo', 'trading': 'paper_only'})
+        return response(200, {'ok': True, 'service': 'Baglo', 'trading': 'paper_only', 'release':os.getenv('BAGLO_RELEASE_ID','local')})
     if path == '/api/config' and method == 'GET':
         return response(200, {'environment': os.getenv('BAGLO_ENV', 'local'),
             'demo': os.getenv('BAGLO_DEMO') == '1' and not os.getenv('BAGLO_TABLE'),

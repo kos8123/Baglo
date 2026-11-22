@@ -1,5 +1,7 @@
-name: Optional manual checks (deployment is AWS CodePipeline)
+name: Pull request checks (deployment is AWS CodePipeline)
 on:
+  pull_request:
+    branches: [dev, main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,4 +22,4 @@ jobs:
       - run: node --experimental-strip-types --test tests/*.test.ts
       - run: cfn-lint infra/template.yaml infra/bootstrap.yaml infra/codepipeline.yaml
       - run: python scripts/build_frontend.py
-      - run: bash -n scripts/deploy.sh
+      - run: bash -n scripts/deploy.sh scripts/setup_codepipeline.sh scripts/setup_secrets.sh

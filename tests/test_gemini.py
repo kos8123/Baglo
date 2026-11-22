@@ -42,3 +42,20 @@ def test_openai_key_does_not_configure_gemini(monkeypatch):
     monkeypatch.delenv('BAGLO_GEMINI_API_KEY',raising=False)
     monkeypatch.setenv('BAGLO_OPENAI_API_KEY','must-not-use')
     assert not ai.configured()
+
+
+def test_gemini_secret_is_loaded_only_on_server(monkeypatch):
+    import boto3
+    from types import SimpleNamespace
+    monkeypatch.setenv('BAGLO_AI_PROVIDER','gemini')
+    monkeypatch.delenv('BAGLO_GEMINI_API_KEY',raising=False)
+    monkeypatch.delenv('GEMINI_API_KEY',raising=False)
+    monkeypatch.setenv('BAGLO_GEMINI_SECRET_ARN','arn:fixture-secret')
+    seen=[]
+    def get(**kwargs):
+        seen.append(kwargs)
+        return {'SecretString':'{"GEMINI_API_KEY":"fixture-secret-value"}'}
+    monkeypatch.setattr(boto3,'client',lambda service:SimpleNamespace(get_secret_value=get))
+    assert ai.configured()
+    assert ai.model_key()=='fixture-secret-value'
+    assert seen==[{'SecretId':'arn:fixture-secret'}]

@@ -3,7 +3,7 @@ phases:
   install:
     runtime-versions:
       python: '3.12'
-      nodejs: '22'
+      nodejs: '24'
     commands:
       - npm install -g pnpm@11.25.0
       - pnpm --dir frontend install --frozen-lockfile
@@ -14,7 +14,8 @@ phases:
       - node --experimental-strip-types --test tests/*.test.ts
       - cfn-lint infra/template.yaml infra/bootstrap.yaml infra/codepipeline.yaml
       - python scripts/build_frontend.py
-      - bash -n scripts/deploy.sh scripts/setup_codepipeline.sh
+      - bash -n scripts/deploy.sh scripts/setup_codepipeline.sh scripts/setup_secrets.sh
+      - python scripts/release_manifest.py create
 artifacts:
   files:
     - 'backend/**/*'
@@ -22,3 +23,4 @@ artifacts:
     - 'scripts/**/*'
     - 'dist/**/*'
     - 'buildspec-deploy.yml'
+    - 'release-manifest.json'

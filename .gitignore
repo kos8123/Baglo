@@ -32,3 +32,5 @@ data/
 
 # TypeScript project build cache
 *.tsbuildinfo
+
+release-manifest.json

@@ -8,6 +8,8 @@ Parameters:
   DeployRoleArn: {Type: String, Description: DeployRoleArn output from updated bootstrap}
   CloudFormationRoleArn: {Type: String}
   FugleSecretArn: {Type: String, Default: ''}
+  GeminiSecretArn: {Type: String, Default: ''}
+  GeminiModel: {Type: String, Default: gemini-3.5-flash-lite}
   OpenAISecretArn: {Type: String, Default: ''}
   OpenAIModel: {Type: String, Default: gpt-4.1-mini}
   AiAccounts: {Type: String, Default: ''}
@@ -74,6 +76,8 @@ Resources:
           - {Name: BAGLO_CFN_ROLE_ARN, Value: !Ref CloudFormationRoleArn}
           - {Name: BAGLO_ARTIFACT_BUCKET, Value: !Ref ArtifactBucket}
           - {Name: BAGLO_FUGLE_SECRET_ARN, Value: !Ref FugleSecretArn}
+          - {Name: BAGLO_GEMINI_SECRET_ARN, Value: !Ref GeminiSecretArn}
+          - {Name: BAGLO_GEMINI_MODEL, Value: !Ref GeminiModel}
           - {Name: BAGLO_OPENAI_SECRET_ARN, Value: !Ref OpenAISecretArn}
           - {Name: BAGLO_OPENAI_MODEL, Value: !Ref OpenAIModel}
           - {Name: BAGLO_AI_ACCOUNTS, Value: !Ref AiAccounts}

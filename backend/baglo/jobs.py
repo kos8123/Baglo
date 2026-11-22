@@ -8,6 +8,7 @@ def handler(event, context):
     from .api import get_store,get_markets
     from .ai import enqueue,execute,settings,update_job
     current=datetime.now(ZoneInfo('Asia/Taipei'))
+    if event.get('phase')=='execute' and not (9,5)<=(current.hour,current.minute)<=(13,30):return {'status':'skipped','reason':'outside_execution_window'}
     if current.weekday()>=5:return {'status':'skipped','reason':'weekend'}
     accounts=[a.strip() for a in os.getenv('BAGLO_AI_ACCOUNTS','').split(',') if a.strip()]
     reports=[]
@@ -15,6 +16,13 @@ def handler(event, context):
     for account in accounts:
         state=store.read(account);policy=settings(state)
         if not policy['enabled']:continue
+        if state.get('ai_selection_mode'):
+            from .local_schedule import selection_tick
+            try:
+                selection_tick(store,markets,account,current)
+                reports.append({'account':account,'status':'selection_tick'})
+            except DomainError as exc:reports.append({'account':account,'status':'blocked','reason':str(exc)})
+            continue
         if event.get('phase')=='execute':
             for symbol in policy['symbols']:
                 job_id='daily-'+current.date().isoformat()+'-'+symbol

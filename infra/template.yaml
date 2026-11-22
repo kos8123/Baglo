@@ -9,6 +9,9 @@ Parameters:
     Type: String
     Default: DISABLED
     AllowedValues: [ENABLED, DISABLED]
+  GeminiSecretArn: {Type: String, Default: ''}
+  GeminiModel: {Type: String, Default: gemini-3.5-flash-lite}
+  ReleaseId: {Type: String, Default: unknown}
   OpenAISecretArn: {Type: String, Default: ''}
   OpenAIModel: {Type: String, Default: gpt-4.1-mini}
   AiAccounts: {Type: String, Default: '', Description: 'Comma-separated Cognito sub IDs explicitly allowed for daily AI paper trading'}
@@ -17,6 +20,7 @@ Parameters:
     Default: ''
     Description: Optional existing Secrets Manager secret ARN; never the API key itself
 Conditions:
+  HasGeminiSecret: !Not [!Equals [!Ref GeminiSecretArn, '']]
   HasOpenAISecret: !Not [!Equals [!Ref OpenAISecretArn, '']]
   HasFugleSecret: !Not [!Equals [!Ref FugleSecretArn, '']]
 Resources:
@@ -187,7 +191,7 @@ Resources:
             Statement:
               - Effect: Allow
                 Action: lambda:InvokeFunction
-                Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ai'
+                Resource: [!Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ai', !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-selection']
         - PolicyName: own-ledger-and-logs
           PolicyDocument:
             Version: '2012-10-17'
@@ -203,6 +207,18 @@ Resources:
                 - Effect: Allow
                   Action: secretsmanager:GetSecretValue
                   Resource: !Ref FugleSecretArn
+                - !Ref AWS::NoValue
+              - !If
+                - HasGeminiSecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref GeminiSecretArn
+                - !Ref AWS::NoValue
+              - !If
+                - HasOpenAISecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref OpenAISecretArn
                 - !Ref AWS::NoValue
               - Effect: Allow
                 Action: [logs:CreateLogStream, logs:PutLogEvents]
@@ -230,6 +246,11 @@ Resources:
           BAGLO_FUGLE_SECRET_ARN: !Ref FugleSecretArn
           BAGLO_ENV: !Ref Environment
           BAGLO_DEMO: '0'
+          BAGLO_AI_PROVIDER: gemini
+          BAGLO_GEMINI_SECRET_ARN: !Ref GeminiSecretArn
+          BAGLO_GEMINI_MODEL: !Ref GeminiModel
+          BAGLO_RELEASE_ID: !Ref ReleaseId
+          BAGLO_SELECTION_WORKER: !Sub '${AWS::StackName}-selection'
           BAGLO_OPENAI_SECRET_ARN: !Ref OpenAISecretArn
           BAGLO_OPENAI_MODEL: !Ref OpenAIModel
           BAGLO_AI_WORKER: !Ref AiWorker
@@ -289,7 +310,7 @@ Resources:
                 Resource: !Sub '${ResearchBucket.Arn}/market/*'
               - Effect: Allow
                 Action: lambda:InvokeFunction
-                Resource: !GetAtt AiWorker.Arn
+                Resource: [!GetAtt AiWorker.Arn, !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-selection']
               - !If
                 - HasFugleSecret
                 - Effect: Allow
@@ -323,6 +344,11 @@ Resources:
           BAGLO_TABLE: !Ref Ledger
           BAGLO_DEMO: '0'
           BAGLO_FUGLE_SECRET_ARN: !Ref FugleSecretArn
+          BAGLO_AI_PROVIDER: gemini
+          BAGLO_GEMINI_SECRET_ARN: !Ref GeminiSecretArn
+          BAGLO_GEMINI_MODEL: !Ref GeminiModel
+          BAGLO_RELEASE_ID: !Ref ReleaseId
+          BAGLO_SELECTION_WORKER: !Sub '${AWS::StackName}-selection'
           BAGLO_OPENAI_SECRET_ARN: !Ref OpenAISecretArn
           BAGLO_AI_WORKER: !Ref AiWorker
           BAGLO_AI_ACCOUNTS: !Ref AiAccounts
@@ -367,11 +393,20 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-selection'
+              - Effect: Allow
                 Action: [dynamodb:GetItem, dynamodb:PutItem]
                 Resource: !GetAtt Ledger.Arn
               - Effect: Allow
                 Action: [s3:GetObject, s3:PutObject]
                 Resource: !Sub '${ResearchBucket.Arn}/market/*'
+              - !If
+                - HasGeminiSecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref GeminiSecretArn
+                - !Ref AWS::NoValue
               - !If
                 - HasOpenAISecret
                 - Effect: Allow
@@ -380,7 +415,7 @@ Resources:
                 - !Ref AWS::NoValue
               - Effect: Allow
                 Action: [logs:CreateLogStream, logs:PutLogEvents]
-                Resource: !GetAtt AiWorkerLog.Arn
+                Resource: [!GetAtt AiWorkerLog.Arn, !GetAtt SelectionWorkerLog.Arn]
   AiWorkerLog:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -392,6 +427,7 @@ Resources:
       FunctionName: !Sub '${AWS::StackName}-ai'
       CodeUri: ../backend/
       Handler: baglo.ai.worker
+      EventInvokeConfig: {MaximumRetryAttempts: 0, MaximumEventAgeInSeconds: 3600}
       Runtime: python3.12
       Architectures: [arm64]
       MemorySize: 512
@@ -401,14 +437,45 @@ Resources:
         Variables:
           BAGLO_TABLE: !Ref Ledger
           BAGLO_DATA_BUCKET: !Ref ResearchBucket
+          BAGLO_AI_PROVIDER: gemini
+          BAGLO_GEMINI_SECRET_ARN: !Ref GeminiSecretArn
+          BAGLO_GEMINI_MODEL: !Ref GeminiModel
+          BAGLO_RELEASE_ID: !Ref ReleaseId
+          BAGLO_SELECTION_WORKER: !Sub '${AWS::StackName}-selection'
           BAGLO_OPENAI_SECRET_ARN: !Ref OpenAISecretArn
           BAGLO_OPENAI_MODEL: !Ref OpenAIModel
+          BAGLO_DEMO: '0'
+  SelectionWorkerLog:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-selection'
+      RetentionInDays: 7
+  SelectionWorker:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-selection'
+      CodeUri: ../backend/
+      Handler: baglo.selection_research.worker
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 512
+      Timeout: 900
+      Role: !GetAtt AiWorkerRole.Arn
+      EventInvokeConfig: {MaximumRetryAttempts: 0, MaximumEventAgeInSeconds: 3600}
+      Environment:
+        Variables:
+          BAGLO_TABLE: !Ref Ledger
+          BAGLO_DATA_BUCKET: !Ref ResearchBucket
+          BAGLO_AI_PROVIDER: gemini
+          BAGLO_GEMINI_SECRET_ARN: !Ref GeminiSecretArn
+          BAGLO_GEMINI_MODEL: !Ref GeminiModel
+          BAGLO_SELECTION_WORKER: !Sub '${AWS::StackName}-selection'
           BAGLO_DEMO: '0'
   AiExecutionSchedule:
     Type: AWS::Scheduler::Schedule
     Properties:
       Description: Submit opted-in AI paper orders after fresh quotes and risk validation
-      ScheduleExpression: 'cron(5 9 ? * MON-FRI *)'
+      ScheduleExpression: 'cron(5/5 9-13 ? * MON-FRI *)'
       ScheduleExpressionTimezone: Asia/Taipei
       State: !Ref PremarketScheduleState
       FlexibleTimeWindow: {Mode: 'OFF'}
@@ -425,3 +492,4 @@ Outputs:
   UserPoolId: {Value: !Ref Users}
   DataBucket: {Value: !Ref ResearchBucket}
   LedgerTable: {Value: !Ref Ledger}
+  ReleaseId: {Value: !Ref ReleaseId}

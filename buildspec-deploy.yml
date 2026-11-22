@@ -7,5 +7,6 @@ phases:
       - python -m pip install aws-sam-cli
   build:
     commands:
+      - python scripts/release_manifest.py verify
       - export BAGLO_PREBUILT_FRONTEND=1
       - bash scripts/deploy.sh "$BAGLO_ENVIRONMENT"

@@ -36,3 +36,40 @@ def test_research_model_receives_only_development_and_never_changes_ledger(tmp_p
     assert result['selected_symbol'] is None  # One buy is insufficient evidence.
     assert 'frozen_strategies' not in sr.public(result)
     with pytest.raises(DomainError):backtest.read('bob',job['id'])
+
+
+def test_cloud_worker_claim_prevents_duplicate_model_calls(tmp_path,monkeypatch):
+    from baglo import api
+    from baglo.store import Store
+    monkeypatch.chdir(tmp_path)
+    store=Store(path=str(tmp_path/'cloud.db'))
+    job_id='22222222-2222-4222-8222-222222222222'
+    backtest.write('alice',{'id':job_id,'status':'queued','created_at':sr.datetime.now().astimezone().isoformat(),'symbols':['2330','2317'],'results':[]})
+    def setup(state):
+        state['ai_selection_job']=job_id
+        return state,None
+    store.mutate('alice',setup)
+    monkeypatch.setattr(api,'get_store',lambda:store)
+    monkeypatch.setattr(api,'get_markets',lambda:None)
+    calls=[]
+    monkeypatch.setattr(sr,'run',lambda *args:calls.append(args))
+    event={'account':'alice','job_id':job_id,'index':0}
+    assert sr.worker(event,None)['status']=='processed'
+    assert sr.worker(event,None)['status']=='duplicate_or_obsolete'
+    assert len(calls)==1
+
+
+def test_cloud_start_dispatches_lambda_instead_of_background_thread(tmp_path,monkeypatch):
+    from baglo.store import Store
+    from baglo import ai
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv('BAGLO_TABLE','fixture-ledger')
+    monkeypatch.setenv('BAGLO_SELECTION_WORKER','fixture-worker')
+    monkeypatch.setattr(ai,'configured',lambda:True)
+    calls=[]
+    monkeypatch.setattr(sr,'dispatch',lambda *args:calls.append(args))
+    store=Store(path=str(tmp_path/'cloud-start.db'))
+    result=sr.start(store,None,'alice')
+    assert calls==[('alice',result['id'],0)]
+    assert sr.start(store,None,'alice')['id']==result['id']
+    assert len(calls)==1
