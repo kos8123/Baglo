@@ -82,6 +82,20 @@ Resources:
           ContentSecurityPolicy:
             Override: true
             ContentSecurityPolicy: !Sub "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.execute-api.${AWS::Region}.amazonaws.com https://*.auth.${AWS::Region}.amazoncognito.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+  WebsiteCache:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub '${AWS::StackName}-website-no-cache'
+        DefaultTTL: 0
+        MaxTTL: 0
+        MinTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingBrotli: false
+          EnableAcceptEncodingGzip: false
+          CookiesConfig: {CookieBehavior: none}
+          HeadersConfig: {HeaderBehavior: none}
+          QueryStringsConfig: {QueryStringBehavior: none}
   Distribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -102,7 +116,7 @@ Resources:
           AllowedMethods: [GET, HEAD]
           CachedMethods: [GET, HEAD]
           Compress: true
-          CachePolicyId: 413f1606-6a09-4c89-b4b0-43e5a38f39af
+          CachePolicyId: !Ref WebsiteCache
           ResponseHeadersPolicyId: !Ref WebHeaders
         ViewerCertificate: {CloudFrontDefaultCertificate: true}
   WebsitePolicy:
@@ -176,7 +190,7 @@ Resources:
             AuthorizationScopes: [baglo-api/access]
             IdentitySource: '$request.header.Authorization'
             JwtConfiguration:
-              issuer: !GetAtt Users.ProviderURL
+              issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${Users}'
               audience: [!Ref Client]
   ApiRole:
     Type: AWS::IAM::Role
