@@ -1,6 +1,6 @@
 # Baglo 雲端開發與 CI/CD
 
-目前狀態：部署程式、IaC 與本機驗證已備妥；尚未登入你的 AWS 或確認新資源建置成功。這份文件不代表已上線。
+目前狀態：dev CI/CD 已建立；首次部署修正與驗收進行中。實際上線版本以 CodePipeline 成功執行與 CloudFormation 輸出為準，不能只以本文件推論。
 
 ## 架構與分支
 
@@ -136,4 +136,4 @@ flowchart LR
   Approve --> Prod[部署正式區]
 ```
 
-失敗時先讀該次 CodeBuild 日誌；重試同一失敗階段即可，不需要從頭建立基礎設施。回退程式請在 Git 建立 revert commit，再經 pipeline；DynamoDB 與研究資料預設 Retain，不刪帳本解決部署問題。
+測試區使用保留失敗資源模式，方便修復後接續部署；正式區保留自動回滾。失敗時先讀該次 CodeBuild 日誌；重試同一失敗階段即可，不需要從頭建立基礎設施。回退程式請在 Git 建立 revert commit，再經 pipeline；DynamoDB 與研究資料預設 Retain，不刪帳本解決部署問題。

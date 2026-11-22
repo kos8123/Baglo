@@ -68,6 +68,9 @@ Resources:
                 Condition:
                   StringEquals: {iam:PassedToService: [lambda.amazonaws.com, scheduler.amazonaws.com]}
               - Effect: Allow
+                Action: [apigateway:POST, apigateway:GET, apigateway:DELETE]
+                Resource: !Sub 'arn:${AWS::Partition}:apigateway:${AWS::Region}::/tags/arn%3A${AWS::Partition}%3Aapigateway%3A${AWS::Region}%3A%3A%2Fv2%2Fapis%2F*'
+              - Effect: Allow
                 Action: ['apigateway:*']
                 Resource: !Sub 'arn:${AWS::Partition}:apigateway:${AWS::Region}::/apis*'
               - Effect: Allow

@@ -15,10 +15,13 @@ PARAMETERS=("Environment=$ENVIRONMENT" "PremarketScheduleState=${BAGLO_AI_SCHEDU
 for PAIR in "FugleSecretArn=${BAGLO_FUGLE_SECRET_ARN:-}" "GeminiSecretArn=${BAGLO_GEMINI_SECRET_ARN:-}" "OpenAISecretArn=${BAGLO_OPENAI_SECRET_ARN:-}" "AiAccounts=${BAGLO_AI_ACCOUNTS:-}"; do
   [[ -z "${PAIR#*=}" ]] || PARAMETERS+=("$PAIR")
 done
+ROLLBACK_OPTIONS=()
+# Keep failed dev resources for in-place repair; production retains normal rollback.
+[[ "$ENVIRONMENT" != dev ]] || ROLLBACK_OPTIONS+=(--disable-rollback)
 sam deploy --stack-name "$STACK" --region "$AWS_REGION" \
   --s3-bucket "$BAGLO_ARTIFACT_BUCKET" --capabilities CAPABILITY_IAM \
   --role-arn "$BAGLO_CFN_ROLE_ARN" \
-  --parameter-overrides "${PARAMETERS[@]}" \
+  --parameter-overrides "${PARAMETERS[@]}" "${ROLLBACK_OPTIONS[@]}" \
   --no-confirm-changeset --no-fail-on-empty-changeset
 OUTPUT_FILE=$(mktemp)
 HEALTH_FILE=$(mktemp)
