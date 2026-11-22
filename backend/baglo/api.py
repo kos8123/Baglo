@@ -36,6 +36,8 @@ def response(status, body):
 def handler(event, context):
     path = event.get('rawPath', '')
     method = event.get('requestContext', {}).get('http', {}).get('method', 'GET')
+    if method == 'OPTIONS' and path.startswith('/api/'):
+        return {'statusCode':204,'headers':{},'body':''}
     if path == '/api/openapi.json' and method == 'GET':
         from .openapi import document
         return response(200, document())

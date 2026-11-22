@@ -276,6 +276,14 @@ Resources:
         AllApi:
           Type: HttpApi
           Properties: {ApiId: !Ref HttpApi, Path: '/api/{proxy+}', Method: ANY, PayloadFormatVersion: '2.0'}
+        PublicPreflight:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/{proxy+}
+            Method: OPTIONS
+            PayloadFormatVersion: '2.0'
+            Auth: {Authorizer: NONE}
         PublicHealth:
           Type: HttpApi
           Properties:

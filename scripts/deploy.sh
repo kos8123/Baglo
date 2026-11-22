@@ -52,4 +52,17 @@ health=json.load(open(sys.argv[3]))
 if health.get('ok') is not True or health.get('trading')!='paper_only' or health.get('release')!=sys.argv[2]:raise SystemExit('Backend health/release does not match validated commit')
 PYCODE
 rm -f "$RELEASE_FILE"
+PREFLIGHT_HEADERS=$(mktemp)
+PREFLIGHT_STATUS=$(curl --silent --show-error --max-time 15 --request OPTIONS --header "Origin: $WEBSITE" --header 'Access-Control-Request-Method: POST' --header 'Access-Control-Request-Headers: authorization,content-type,idempotency-key' --dump-header "$PREFLIGHT_HEADERS" --output /dev/null --write-out '%{http_code}' "$API_URL/api/orders")
+python3 - "$PREFLIGHT_HEADERS" "$PREFLIGHT_STATUS" "$WEBSITE" <<'PYCORS'
+import sys
+from email.parser import Parser
+raw=open(sys.argv[1]).read().split('\n',1)[1]
+headers=Parser().parsestr(raw)
+if sys.argv[2] not in ('200','204'):raise SystemExit('Browser CORS preflight failed: '+sys.argv[2])
+if headers.get('access-control-allow-origin')!=sys.argv[3]:raise SystemExit('CORS origin mismatch')
+allowed={x.strip().lower() for x in headers.get('access-control-allow-headers','').split(',')}
+if not {'authorization','content-type','idempotency-key'}<=allowed:raise SystemExit('CORS request headers missing')
+PYCORS
+rm -f "$PREFLIGHT_HEADERS"
 echo "Deployed $ENVIRONMENT commit $RELEASE: $WEBSITE"

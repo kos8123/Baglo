@@ -59,3 +59,20 @@ test("validation failure is not treated as a success or automatically retried", 
     globalThis.fetch = oldFetch;
   }
 });
+
+test("read requests avoid JSON preflight headers and do not imply an uncertain order", async () => {
+  const { api, ApiError } = await import("../frontend/src/lib.ts");
+  const previous = globalThis.fetch;
+  globalThis.fetch = (async (_url, options) => {
+    assert.equal(new Headers(options?.headers).has("Content-Type"), false);
+    throw new TypeError("network unavailable");
+  }) as typeof fetch;
+  try {
+    await assert.rejects(api("/config"), (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.equal(error.uncertain, false);
+      assert.equal(error.message.includes("委託"), false);
+      return true;
+    });
+  } finally { globalThis.fetch = previous; }
+});
