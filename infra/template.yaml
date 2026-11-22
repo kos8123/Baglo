@@ -236,7 +236,7 @@ Resources:
       SupportedIdentityProviders: [COGNITO, !If [HasGoogle, !Ref GoogleProvider, !Ref AWS::NoValue]]
       CallbackURLs:
         - !Sub 'https://${Distribution.DomainName}/'
-        - !If [HasExternalFrontend, !Sub '${FrontendUrl}/terminal.html', !Ref 'AWS::NoValue']
+        - !If [HasExternalFrontend, !Sub '${FrontendUrl}/terminal', !Ref 'AWS::NoValue']
       LogoutURLs:
         - !Sub 'https://${Distribution.DomainName}/'
         - !If [HasExternalFrontend, !Sub '${FrontendUrl}/', !Ref 'AWS::NoValue']

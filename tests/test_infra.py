@@ -44,4 +44,4 @@ def test_cloudflare_pages_build_has_public_home_legal_and_terminal_routes():
     template=yaml.load((ROOT/'infra/template.yaml').read_text(), Loader=Loader)
     assert 'FrontendUrl' in template['Parameters']
     client=template['Resources']['Client']['Properties']
-    assert any('terminal.html' in str(value) for value in client['CallbackURLs'])
+    assert any('/terminal' in str(value) for value in client['CallbackURLs'])

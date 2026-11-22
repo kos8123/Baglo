@@ -138,7 +138,9 @@ export async function login(config: Config) {
   sessionStorage.setItem("baglo_oauth_state", state);
   const url = new URL(config.auth_domain + "/oauth2/authorize");
   const redirect = new URL(
-    location.pathname.endsWith("/terminal.html") ? "/terminal.html" : "/",
+    location.pathname === "/terminal" || location.pathname.endsWith("/terminal.html")
+      ? "/terminal"
+      : "/",
     location.origin,
   ).toString();
   url.search = new URLSearchParams({
@@ -182,7 +184,9 @@ export function initialize() {
     }
     if (query.has("code")) {
       const redirect = new URL(
-        location.pathname.endsWith("/terminal.html") ? "/terminal.html" : "/",
+        location.pathname === "/terminal" || location.pathname.endsWith("/terminal.html")
+          ? "/terminal"
+          : "/",
         location.origin,
       ).toString();
       const state = sessionStorage.getItem("baglo_oauth_state"),

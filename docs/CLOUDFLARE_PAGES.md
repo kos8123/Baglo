@@ -27,7 +27,7 @@ NODE_VERSION=24
 SKIP_DEPENDENCY_INSTALL=1
 ```
 
-`BAGLO_API_BASE` 是公開 API Gateway 網址，不是密鑰。`SKIP_DEPENDENCY_INSTALL` 避免 Pages 將根目錄的 Python 後端當成前端相依套件安裝；建置腳本會自行使用固定的 pnpm 版本安裝前端。Cloudflare Pages 會把 `home.html` 發布成網站根目錄，把交易工作台發布為 `/terminal.html`，並保留 `/privacy.html` 與 `/terms.html`。
+`BAGLO_API_BASE` 是公開 API Gateway 網址，不是密鑰。`SKIP_DEPENDENCY_INSTALL` 避免 Pages 將根目錄的 Python 後端當成前端相依套件安裝；建置腳本會自行使用固定的 pnpm 版本安裝前端。Cloudflare Pages 會把 `home.html` 發布成網站根目錄，把交易工作台發布為乾淨網址 `/terminal`，並保留 `/privacy` 與 `/terms`。
 
 ## 將 Pages 網址加入 AWS
 
@@ -39,7 +39,7 @@ bash scripts/setup_codepipeline.sh arn:aws:codeconnections:us-east-1:96741723483
 aws codepipeline start-pipeline-execution --region us-east-1 --name baglo-dev-pipeline
 ```
 
-這會將 Pages origin 加入 API CORS，並把 `${BAGLO_DEV_FRONTEND_URL}/terminal.html` 加入 Cognito callback URL。正式區使用 `BAGLO_PROD_FRONTEND_URL`，且應使用正式 domain。
+這會將 Pages origin 加入 API CORS，並把 `${BAGLO_DEV_FRONTEND_URL}/terminal` 加入 Cognito callback URL。正式區使用 `BAGLO_PROD_FRONTEND_URL`，且應使用正式 domain。
 
 ## Google OAuth 與自訂網域
 
