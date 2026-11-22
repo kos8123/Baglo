@@ -70,3 +70,23 @@ def test_enqueue_accepts_registry_verified_otc_stock(tmp_path,monkeypatch):
     result=ai.enqueue(store,markets,'alice','6488')
     assert seen==['6488'] and result['symbol']=='6488' and result['status']=='queued'
     assert len(dispatched)==1
+
+
+def test_model_probe_never_claims_connection_without_real_expected_response(monkeypatch):
+    import json
+    monkeypatch.setenv('BAGLO_OPENAI_API_KEY','fixture-not-a-real-key')
+    monkeypatch.setenv('BAGLO_OPENAI_MODEL','fixture-model')
+    class Response:
+        def __enter__(self):return self
+        def __exit__(self,*args):return False
+        def read(self,*args):return json.dumps({'status':'completed','output':[{'content':[{'type':'output_text','text':'{"ready":true}'}]}]}).encode()
+    seen=[]
+    def fetch(request,timeout):
+        seen.append(json.loads(request.data));return Response()
+    monkeypatch.setattr(ai,'urlopen',fetch)
+    result=ai.probe()
+    assert result['connected'] is True and result['model']=='fixture-model'
+    assert seen[0]['store'] is False and 'holdings' not in seen[0]['input']
+    monkeypatch.delenv('BAGLO_OPENAI_API_KEY')
+    monkeypatch.delenv('BAGLO_OPENAI_SECRET_ARN',raising=False)
+    with pytest.raises(DomainError,match='金鑰'):ai.probe()

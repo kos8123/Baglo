@@ -99,6 +99,17 @@ export function AiTrading({
     },
     onError: (e: Error) => notify(e.message, true),
   });
+  const connection = useMutation({
+    mutationFn: () =>
+      api<{
+        connected: boolean;
+        model: string;
+        tested_at: string;
+        message: string;
+      }>("/ai/test", { method: "POST", body: "{}" }),
+    onSuccess: (result) => notify(result.message),
+    onError: (error: Error) => notify(error.message, true),
+  });
   return (
     <div className="ai-workspace">
       <div className="section-title">
@@ -119,6 +130,37 @@ export function AiTrading({
           建議不保證獲利，委託不自動成交。
         </span>
       </div>
+      <section className="panel ai-connection">
+        <div className="panel-heading">
+          <h2>模型連線</h2>
+          <span className="badge">OpenAI Responses API</span>
+        </div>
+        <p className="panel-footnote">
+          先在本機 .env.local 填入 BAGLO_OPENAI_API_KEY，模型設定為
+          BAGLO_OPENAI_MODEL，重啟後再測試。金鑰不放前端，也不要貼到聊天室。測試會發出一個簡短請求，消耗少量
+          API 額度，但不分析股票、不建立委託。
+        </p>
+        <div className="backtest-actions">
+          <Button
+            disabled={!enabled || connection.isPending}
+            onClick={() => connection.mutate()}
+          >
+            {connection.isPending ? "測試模型中…" : "測試模型連線"}
+          </Button>
+          <Button variant="outline" onClick={() => void status.refetch()}>
+            重新讀取狀態
+          </Button>
+        </div>
+        {connection.error && (
+          <p className="inline-error">{connection.error.message}</p>
+        )}
+        {connection.data && (
+          <p className="panel-footnote">
+            {connection.data.model} · {dateLabel(connection.data.tested_at)} ·{" "}
+            {connection.data.message}
+          </p>
+        )}
+      </section>
       {status.error && (
         <div className="inline-error">{status.error.message}</div>
       )}

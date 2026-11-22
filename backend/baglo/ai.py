@@ -9,6 +9,7 @@ import os
 import uuid
 import re
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 from concurrent.futures import ThreadPoolExecutor
 from .domain import DomainError, now, place_order, stock_price_tick
 
@@ -89,6 +90,23 @@ def model_key():
     import boto3
     raw=boto3.client('secretsmanager').get_secret_value(SecretId=os.environ['BAGLO_OPENAI_SECRET_ARN'])['SecretString']
     return json.loads(raw)['OPENAI_API_KEY'] if raw.lstrip().startswith('{') else raw
+
+def probe():
+    if not configured():raise DomainError('請先在本機 .env.local 設定 BAGLO_OPENAI_API_KEY 並重啟；富果金鑰不能用來呼叫模型',409)
+    model=os.getenv('BAGLO_OPENAI_MODEL','gpt-4.1-mini')
+    schema={'type':'object','properties':{'ready':{'type':'boolean'}},'required':['ready'],'additionalProperties':False}
+    body={'model':model,'store':False,'max_output_tokens':128,'input':'Connection test only. Return ready=true. Do not produce trading advice.',
+          'text':{'format':{'type':'json_schema','name':'connection_test','strict':True,'schema':schema}}}
+    request=Request('https://api.openai.com/v1/responses',data=json.dumps(body).encode(),headers={'Authorization':'Bearer '+model_key(),'Content-Type':'application/json'})
+    try:
+        with urlopen(request,timeout=15) as response:result=json.loads(response.read(100000))
+        text=''.join(part.get('text','') for item in result.get('output',[]) for part in item.get('content',[]) if part.get('type')=='output_text')
+        if result.get('status')!='completed' or json.loads(text).get('ready') is not True:raise DomainError('模型沒有完成預期的結構化回應，尚未確認連線',503)
+    except HTTPError as error:
+        messages={401:'模型金鑰無效，請檢查 OpenAI 金鑰',403:'此金鑰沒有呼叫權限',404:'設定的模型不存在或帳戶無權使用',429:'模型額度不足或請求過多，請檢查 API 帳務與限制'}
+        raise DomainError(messages.get(error.code,'模型服務暫時不可用，請稍後重試'),503)
+    except (URLError,TimeoutError,ValueError):raise DomainError('模型連線逾時或回應格式錯誤，尚未確認接通',503)
+    return {'connected':True,'model':model,'tested_at':now(),'message':'已收到模型的結構化回應；這次只測試連線，未分析股票或建立委託。'}
 
 def infer(snapshot):
     symbol=snapshot['symbol']

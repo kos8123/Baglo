@@ -100,6 +100,9 @@ def handler(event, context):
         body = json.loads(raw)
         if not isinstance(body, dict):
             raise DomainError('請求內容必須為 JSON object')
+        if method == 'POST' and path == '/api/ai/test':
+            from .ai import probe
+            return response(200,probe())
         if method == 'POST' and path == '/api/backtests':
             from .backtest import start
             return response(202,start(account,body,get_markets()))

@@ -39,6 +39,7 @@ def document():
       '/api/backtests':{'post':op('建立非同步固定策略回測，不改動模擬帳本',code='202',body={'type':'object','required':['symbol','strategy','start_date','end_date','initial_cash','fast','slow','lookback','slippage_bps','market_type'],'properties':{'symbol':{'type':'string'},'strategy':{'type':'string','enum':['sma','breakout','buy_hold']},'start_date':{'type':'string','format':'date'},'end_date':{'type':'string','format':'date'},'initial_cash':integer('本金，分',100000),'fast':{'type':'integer'},'slow':{'type':'integer'},'lookback':{'type':'integer'},'slippage_bps':{'type':'integer'},'market_type':{'type':'string','enum':['odd_lot','board_lot']}}})},
       '/api/backtests/{id}':{'get':op('取得自己帳戶的回測狀態與結果',params=[param('id',where='path',required=True)])},
       '/api/ai':{'get':op('AI 設定、工作狀態與已保存的建議')},
+      '/api/ai/test':{'post':op('實際模型連線與結構化輸出測試，會消耗少量模型額度，不產生委託')},
       '/api/ai/settings':{'put':op('儲存帳戶 AI 純模擬設定；啟用需另有模型金鑰',schema=ref('AiSettings'),body=ref('AiSettings'))},
       '/api/ai/jobs':{'post':op('非同步建立三面向 AI 分析，可能產生 OpenAI API 費用',body={'type':'object','required':['symbol'],'properties':{'symbol':{'type':'string'}}},code='202')},
       '/api/ai/jobs/{id}/execute':{'post':op('將今日 AI 建議轉成模擬委託；需開市、可信即時報價與風控',schema=ref('Order'),params=[param('id',where='path',required=True)])},
