@@ -7,7 +7,7 @@ import os
 from urllib.parse import urlsplit, parse_qs
 from .api import handler
 
-FRONTEND = Path(__file__).resolve().parents[2] / 'frontend'
+FRONTEND = Path(__file__).resolve().parents[2] / 'dist'
 
 class LocalHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -44,6 +44,8 @@ def main():
     parser.add_argument('--demo', action='store_true')
     parser.add_argument('--env-file', default='.env.local')
     args = parser.parse_args()
+    if not (FRONTEND/'index.html').exists():
+        parser.error('React build missing. Run pnpm --dir frontend install, then python scripts/build_frontend.py')
     env_file = Path(args.env_file)
     if env_file.exists():
         for line in env_file.read_text().splitlines():

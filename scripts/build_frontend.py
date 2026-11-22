@@ -1,8 +1,10 @@
-"""Build deterministic static assets; config contains public API URL only."""
+"""Compile the React terminal to static assets and write public runtime config."""
 import argparse
 import json
+import os
 from pathlib import Path
 import shutil
+import subprocess
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,10 +14,19 @@ def build(output, api_base=''):
         parsed = urlsplit(api_base)
         if parsed.scheme != 'https' or not parsed.netloc or parsed.query or parsed.fragment or parsed.username:
             raise ValueError('Cloud API URL must be HTTPS without credentials/query/fragment')
-    output = Path(output)
-    output.mkdir(parents=True, exist_ok=True)
-    for name in ['index.html', 'app.js', 'chart-data.js', 'styles.css']:
-        shutil.copyfile(ROOT/'frontend'/name, output/name)
+    node = os.getenv('BAGLO_NODE_BIN') or shutil.which('node')
+    if not node:
+        raise RuntimeError('Node.js 24 required; install Node and run pnpm install in frontend first')
+    frontend = ROOT/'frontend'
+    tsc = frontend/'node_modules/typescript/bin/tsc'
+    vite = frontend/'node_modules/vite/bin/vite.js'
+    if not tsc.exists() or not vite.exists():
+        raise RuntimeError('Frontend dependencies missing: run pnpm --dir frontend install --frozen-lockfile')
+    subprocess.run([node, str(tsc), '-b'], cwd=frontend, check=True)
+    output = Path(output).resolve()
+    if output in [ROOT, frontend] or output in ROOT.parents:
+        raise ValueError('Build output must be a dedicated directory')
+    subprocess.run([node, str(vite), 'build', '--outDir', str(output)], cwd=frontend, check=True)
     (output/'config.json').write_text(json.dumps({'api_base': api_base.rstrip('/')})+'\n')
 
 if __name__ == '__main__':

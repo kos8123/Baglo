@@ -26,8 +26,11 @@ def test_deployment_requires_identity_and_has_no_demo_or_public_bucket():
     assert 'AWS::EC2::Instance' not in [r['Type'] for r in resources.values()]
 
 def test_static_assets_have_no_credentials_or_server_side_dependency():
-    assert json.loads((ROOT/'frontend/config.json').read_text()) == {'api_base': ''}
-    for path in (ROOT/'frontend').iterdir():
+    assert json.loads((ROOT/'frontend/public/config.json').read_text()) == {'api_base': ''}
+    paths = list((ROOT/'frontend/src').rglob('*.ts')) + list((ROOT/'frontend/src').rglob('*.tsx'))
+    for path in paths:
         text = path.read_text()
         assert 'sk-proj-' not in text and 'OPENAI_API_KEY' not in text
-    assert "document.createElement" in (ROOT/'frontend/app.js').read_text()
+    assert "createRoot" in (ROOT/'frontend/src/main.tsx').read_text()
+    assert 'lightweight-charts' in (ROOT/'frontend/package.json').read_text()
+    assert 'script type="module"' in (ROOT/'frontend/index.html').read_text()

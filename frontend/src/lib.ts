@@ -1,0 +1,153 @@
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+import type { Config } from "./types";
+export const cn = (...values: ClassValue[]) => twMerge(clsx(values));
+export const money = (value: number | null | undefined) =>
+  value == null
+    ? "—"
+    : new Intl.NumberFormat("zh-TW", {
+        style: "currency",
+        currency: "TWD",
+        maximumFractionDigits: 2,
+      }).format(value / 100);
+export const pct = (value: number | null | undefined) =>
+  value == null ? "—" : (value > 0 ? "+" : "") + value.toFixed(2) + "%";
+export const shares = (value: number) =>
+  value >= 1000
+    ? `${Math.floor(value / 1000).toLocaleString()} 張${value % 1000 ? " " + (value % 1000) + " 股" : ""}`
+    : `${value.toLocaleString()} 股`;
+export const dateLabel = (value?: string) => {
+  if (!value) return "—";
+  if (value.length === 10) return value;
+  const d = new Date(value);
+  return Number.isNaN(d.valueOf())
+    ? value
+    : new Intl.DateTimeFormat("zh-TW", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "Asia/Taipei",
+      }).format(d);
+};
+export const tick = (price: number, config: Config) =>
+  config.price_ticks.find((b) => b.below === null || price < b.below)!.tick;
+let apiBase = "";
+export async function api<T>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
+  const token = sessionStorage.getItem("baglo_token");
+  let response: Response;
+  try {
+    response = await fetch(apiBase + "/api" + path, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: "Bearer " + token } : {}),
+        ...options.headers,
+      },
+      signal: options.signal
+        ? AbortSignal.any([options.signal, AbortSignal.timeout(30000)])
+        : AbortSignal.timeout(30000),
+    });
+  } catch (e) {
+    if (options.signal?.aborted) throw e;
+    throw new Error("連線逾時或網路中斷，請稍後重試；勿重複建立委託。");
+  }
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error("服務回應格式錯誤，請稍後重試");
+  }
+  if (!response.ok) {
+    if (response.status === 401) {
+      sessionStorage.removeItem("baglo_token");
+      window.dispatchEvent(new Event("baglo-unauthorized"));
+    }
+    throw new Error(data.error || "服務暫時無法使用");
+  }
+  return data;
+}
+const b64 = (buffer: ArrayBuffer | Uint8Array) =>
+  btoa(String.fromCharCode(...new Uint8Array(buffer)))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
+export async function login(config: Config) {
+  const verifier = b64(crypto.getRandomValues(new Uint8Array(32))),
+    state = crypto.randomUUID();
+  sessionStorage.setItem("baglo_verifier", verifier);
+  sessionStorage.setItem("baglo_oauth_state", state);
+  const url = new URL(config.auth_domain + "/oauth2/authorize");
+  url.search = new URLSearchParams({
+    client_id: config.client_id,
+    response_type: "code",
+    scope: "openid baglo-api/access",
+    redirect_uri: location.origin + "/",
+    state,
+    code_challenge_method: "S256",
+    code_challenge: b64(
+      await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)),
+    ),
+  }).toString();
+  location.assign(url);
+}
+export function logout(config: Config) {
+  sessionStorage.removeItem("baglo_token");
+  if (!config.auth_domain) {
+    location.reload();
+    return;
+  }
+  const url = new URL(config.auth_domain + "/logout");
+  url.search = new URLSearchParams({
+    client_id: config.client_id,
+    logout_uri: location.origin + "/",
+  }).toString();
+  location.assign(url);
+}
+let bootstrap: Promise<Config> | null = null;
+export function initialize() {
+  return (bootstrap ??= (async () => {
+    const response = await fetch("/config.json", { cache: "no-store" });
+    if (!response.ok) throw new Error("無法讀取網站設定");
+    apiBase = ((await response.json()).api_base || "").replace(/\/$/, "");
+    const config = await api<Config>("/config");
+    const query = new URLSearchParams(location.search);
+    if (query.has("error")) {
+      history.replaceState(null, "", "/");
+      throw new Error("登入未完成，請重新登入");
+    }
+    if (query.has("code")) {
+      const state = sessionStorage.getItem("baglo_oauth_state"),
+        verifier = sessionStorage.getItem("baglo_verifier");
+      history.replaceState(null, "", "/");
+      sessionStorage.removeItem("baglo_oauth_state");
+      sessionStorage.removeItem("baglo_verifier");
+      if (!state || state !== query.get("state") || !verifier)
+        throw new Error("登入驗證已失效");
+      const token = await fetch(config.auth_domain + "/oauth2/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          client_id: config.client_id,
+          code: query.get("code")!,
+          redirect_uri: location.origin + "/",
+          code_verifier: verifier,
+        }),
+      });
+      const data = await token.json();
+      if (!token.ok || !data.access_token)
+        throw new Error("登入失敗，請重新登入");
+      sessionStorage.setItem("baglo_token", data.access_token);
+    }
+    return config;
+  })().catch((e) => {
+    bootstrap = null;
+    throw e;
+  }));
+}

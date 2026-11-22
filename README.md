@@ -4,44 +4,46 @@
 
 ## 目前可以做什麼
 
-- 靜態、響應式前端：交易工作台、官方研究資料、委託紀錄。
+- React + TypeScript + Vite 靜態響應式前端：交易工作台、官方研究資料、委託紀錄。
 - 以代號、名稱搜尋上市櫃普通股，提供收盤價區間篩選、鍵盤選取與清除條件。
 - 富果整股／零股分開報價；未設定金鑰或來源失敗時顯示官方最近收盤參考，不冒充現價。
 - 選股自動帶入參考價；改價後更新報價不覆蓋自訂限價，提供升降單位加減鍵與送出前確認。
 - TWSE／TPEx 官方歷史日線、SMA20／60、營收成長率、估值與三大法人資料，逐項標示來源及日期。
 - 每個帳戶初始虛擬本金 NT$300,000；限價委託、取消、資金／持倉保留。
-- 下單可切換整股（張）與零股（股）：目前六檔普通股每張 1,000 股，零股每筆 1～999 股；前端換算總股數，後端獨立檢查交易類別。
+- 下單可切換整股（張）與零股（股）：普通股每張 1,000 股，零股每筆 1～999 股；前端換算總股數，後端獨立檢查交易類別。
 - 即時顯示預估委託金額、手續費、賣出稅與保留金額；委託紀錄顯示整股／零股與張數。
-- 重複請求防護、禁止放空、單筆買入最高 NT$60,000。
+- 重複請求防護、禁止放空；不設單筆金額上限，仍檢查現金與持倉。
 - 本機 SQLite 持久化；Lambda 使用 DynamoDB 條件寫入，避免並行修改覆蓋帳本。
 - 本機限定的沙盒成交，用輸入限價驗證帳務；明確標示為非真實行情。
 - AWS SAM 模板：Lambda、HTTP API、Cognito、DynamoDB、私人 S3、CloudFront、排程與日誌。
-- GitHub Actions：測試、JavaScript 語法檢查、IaC 驗證、靜態檔建置；完成 AWS bootstrap 後可依分支自動部署。
+- GitHub Actions：測試、TypeScript 檢查、IaC 驗證、Vite 靜態建置；完成 AWS bootstrap 後可依分支自動部署。
 
 **目前沒有行情驅動的自動撮合、OpenAI 呼叫或 AI 自動交易。** 研究室已能查看基礎官方資料，但不代表完整財報分析或 AI 判斷；部署版委託仍保持待成交。排程預設停用；啟用後目前只寫入「資料未就緒」稽核報告，不產生交易。所有帳戶均為模擬，不連接券商。
 
-視覺方向參考 [RonDesignLab 的 E*TRADE 設計](https://dribbble.com/shots/21333645-E-TRADE-Online-Trading-Platform)：炭黑底、螢光黃綠、膠囊導覽與交易面板；保留 Baglo 品牌，自行實作元件，沒有使用參考圖的品牌素材。
+視覺方向參考 [RonDesignLab 的 E*TRADE 設計](https://dribbble.com/shots/21333645-E-TRADE-Online-Trading-Platform)：深色交易終端、低彩度邊框、三欄工作區與紅買綠賣按鈕；保留 Baglo 品牌，自行實作元件，沒有使用參考圖的品牌素材。
 
 ## 本機啟動
 
-需要 Python 3.12。應用本身使用標準函式庫；測試另需安裝開發依賴。
+需要 Python 3.12、Node.js 24、pnpm 11.25。後端本機使用 Python 標準函式庫；前端需先安裝並編譯。
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements-dev.txt
+pnpm --dir frontend install --frozen-lockfile
+python scripts/build_frontend.py
 PYTHONPATH=backend python -m baglo.local --demo --port 8000
 ```
 
 開啟 <http://127.0.0.1:8000>。本機僅綁定 loopback，由開發伺服器注入固定沙盒身分，不是雲端登入。移除 `--demo` 後仍能建立／取消委託，但不能沙盒成交。啟動時預設讀取 `.env.local`，僅允許指定的後端設定；金鑰不進入前端。本機帳本在 `data/baglo.db`，不會上傳 Git。
 
-金額 API 一律以整數「分」傳遞，股數以整數「股」傳遞。`market_type` 為 `board_lot`（整股）或 `odd_lot`（零股），整股下單時 API 的 `quantity` 仍為總股數：1 張傳 `1000`，不是 `1`。未傳 market_type 的舊客戶端依股數推定，原有帳本與請求編號不改寫。整股數量須為 1,000 的倍數，本版最多 499 張；零股限 1～999 股。混合數量需分別委託；兩種市場共用資金與持倉保留，不能重複賣出。例如 NT$1,000 為 `100000`。交易單位依據 [TWSE 交易制度說明](https://www.twse.com.tw/zh/products/system/trading.html)；目前僅支援清單內六檔普通股，不推廣至交易單位不同的商品。
+金額 API 一律以整數「分」傳遞，股數以整數「股」傳遞。`market_type` 為 `board_lot`（整股）或 `odd_lot`（零股），整股下單時 API 的 `quantity` 仍為總股數：1 張傳 `1000`，不是 `1`。未傳 market_type 的舊客戶端依股數推定，原有帳本與請求編號不改寫。整股數量須為 1,000 的倍數，本版最多 499 張；零股限 1～999 股。混合數量需分別委託；兩種市場共用資金與持倉保留，不能重複賣出。例如 NT$1,000 為 `100000`。交易單位依據 [TWSE 交易制度說明](https://www.twse.com.tw/zh/products/system/trading.html)；目前支援經資料來源驗證的四碼上市櫃普通股，不推廣至交易單位不同的商品。
 
-本版手續費為成交金額 0.1425%，最低 NT$20；賣出股票稅率 0.3%。未模擬委託簿、交易量、漲跌停、除權息、滑價、交易日及 T+2 交割，因此沙盒結果不能當成投資績效。
+本版手續費為成交金額 0.1425%，最低 NT$20；賣出股票稅率 0.3%。已檢查來源漲跌停價格；未模擬委託簿、交易量、除權息、滑價、交易日及 T+2 交割，因此沙盒結果不能當成投資績效。
 
 ```bash
 python -m pytest -q
-node --check frontend/app.js
+node --experimental-strip-types --test tests/chart-data.test.ts
 cfn-lint infra/template.yaml infra/bootstrap.yaml
 python scripts/build_frontend.py
 ```
@@ -78,7 +80,7 @@ python scripts/build_frontend.py
 
 ### 富果本機設定
 
-複製 `.env.example` 為 `.env.local`，填入 `BAGLO_FUGLE_API_KEY`。`.env.local` 被 Git 忽略；不要把金鑰放入 `frontend/config.json`。既有本機金鑰設定不隨 repository 上傳。
+複製 `.env.example` 為 `.env.local`，填入 `BAGLO_FUGLE_API_KEY`。`.env.local` 被 Git 忽略；不要把金鑰放入 `frontend/public/config.json`。既有本機金鑰設定不隨 repository 上傳。
 
 ### 富果雲端設定
 
@@ -191,10 +193,22 @@ aws cloudformation describe-stacks --region us-east-1 \
 
 ### 交易工作台更新
 
-日 K 線依真實 OHLC 繪製，紅漲綠跌；提供十字游標、開高低收與成交量、滾輪縮放、拖曳、放大縮小與重設。歷史資料先載入半年，再逐批擴充至近三年；可手動載入更多，最多最近十年，實際以來源可用資料為準，不含還原權息。
+日 K 線改由 TradingView Lightweight Charts 依真實 OHLC 繪製，紅漲綠跌；提供十字游標、開高低收與成交量、滾輪縮放、拖曳、放大縮小與重設。歷史資料先載入半年，再逐批擴充至近三年；可手動載入更多，最多最近十年，實際以來源可用資料為準，不含還原權息。
 
 日 K、週 K、月 K 可切換；週線以週一為界，月線以曆月為界。各棒取首日開盤、最高、最低、末日收盤與成交量加總；最近週／月尚未結束時為截至最新交易日的部分期間，來源缺漏不補造資料。十字線吸附選定 K 棒的日期與收盤價；預設顯示 120 根日線、104 根週線或 60 根月線（資料不足時顯示實有根數），保留縮放和拖曳。
 
 買進／賣出按鈕分開，送出前需確認方向、數量、價格與費用，完成後可點通知前往委託紀錄。取消原本單筆本金 20% 的金額限制；保留資金、持倉、升降單位及交易股數規則。
 
 漲跌停使用 Fugle intraday ticker 的 limitUpPrice / limitDownPrice 與日期，不以昨收推算，避免除權息與新掛牌例外誤判。平日只接受當日資料；週末僅容許最近四日內來源的歷史交易日模擬，明示日期，不代表下個交易日範圍。來源缺漏、過期、無有效上下限（含尚未支援的無漲跌幅情境）暫停新增委託；取消委託與既有請求重播仍可用。
+
+## React 交易終端
+
+- React 19 + TypeScript + Vite 7；Tailwind CSS 4 管線與統一交易版面樣式。
+- Radix Dialog、CVA 按鈕等 shadcn/ui 式可控元件（元件程式保存在本庫），Lucide 圖示。
+- TanStack Query 管理搜尋、行情、歷史分頁、研究與帳戶狀態；寫入不自動重試，委託保留原始冪等編號。
+- Lightweight Charts 5 提供 Canvas K 棒、成交量副圖、磁吸收盤十字線、拖曳、縮放、全部歷史與重設。週／月由真實日線聚合，沒有推估缺漏日。保留 TradingView 歸屬與授權。
+- `frontend/src/components` 分為 StockSearch、PriceChart、OrderTicket、Orders、Positions、Research 與 UI primitives。舊的 DOM 操作與 SVG 已移除，Git 歷史可取回。
+- `scripts/build_frontend.py` 執行 TypeScript 與 Vite，輸出 `dist/`，再注入公開的 API URL。Lambda 不需 Node；前端沒有 SSR 或 EC2 需求。
+- 本機 Python 8000 埠提供 `dist/` 與 API。前端開發可另執行 `pnpm --dir frontend dev`，開啟 5173；Vite 代理 `/api` 到 8000。
+
+本次僅執行編譯、既有後端檢查與資料聚合檢查。互動與跨裝置驗收由使用者依 [驗收清單](docs/ACCEPTANCE.md) 操作；尚未宣稱所有瀏覽器操作驗收通過。
