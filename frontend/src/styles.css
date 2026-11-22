@@ -1843,3 +1843,4 @@ footer {
     max-width: calc(100vw - 24px);
   }
 }
+.ai-pool-search{position:relative;margin:18px 0 10px;z-index:3}.ai-pool-search>.instrument-search{width:100%;margin-top:8px}.ai-settings{overflow:visible}.ai-pool-list{display:flex;flex-direction:column;gap:4px;margin:12px 0 18px;max-height:240px;overflow:auto}.ai-pool-list>div{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:4px 0;font-size:12px}

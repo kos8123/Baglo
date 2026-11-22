@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, dateLabel, money } from "../lib";
 import type { Config, Instrument } from "../types";
 import { Button } from "./ui/button";
+import { StockSearch } from "./StockSearch";
 import { Dialog } from "./ui/dialog";
 interface Settings {
   enabled: boolean;
@@ -164,25 +165,60 @@ export function AiTrading({
               }
             />
           </label>
-          <div className="ai-symbols">
-            {config.symbols.map((i) => (
-              <label className="check-field" key={i.symbol}>
-                <input
-                  type="checkbox"
-                  checked={policy.symbols.includes(i.symbol)}
-                  onChange={(e) =>
+          <div className="ai-pool-search">
+            <label>加入自動模擬標的</label>
+            <StockSearch
+              autoSelectExact={false}
+              selected={current}
+              enabled={enabled}
+              onDirty={() => {}}
+              onSelect={(item) => {
+                if (!policy.symbols.includes(item.symbol))
+                  setPolicy((previous) => ({
+                    ...previous,
+                    symbols: [...previous.symbols, item.symbol],
+                  }));
+              }}
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={policy.symbols.includes(current.symbol)}
+            onClick={() =>
+              setPolicy({
+                ...policy,
+                symbols: [...policy.symbols, current.symbol],
+              })
+            }
+          >
+            加入目前股票 {current.symbol} {current.name}
+          </Button>
+          <div className="ai-pool-list">
+            {policy.symbols.map((symbol) => (
+              <div key={symbol}>
+                <span>
+                  {symbol}{" "}
+                  {config.symbols.find((i) => i.symbol === symbol)?.name ||
+                    (current.symbol === symbol ? current.name : "")}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={"移除 " + symbol}
+                  onClick={() =>
                     setPolicy({
                       ...policy,
-                      symbols: e.target.checked
-                        ? [...policy.symbols, i.symbol]
-                        : policy.symbols.filter((s) => s !== i.symbol),
+                      symbols: policy.symbols.filter((s) => s !== symbol),
                     })
                   }
-                />
-                {i.symbol} {i.name}
-              </label>
+                >
+                  移除
+                </Button>
+              </div>
             ))}
           </div>
+
           <Button
             disabled={!enabled || save.isPending}
             onClick={() => {
@@ -209,18 +245,13 @@ export function AiTrading({
             按下後以最新可取得的公開資料分析三個面向。分析完成後，你可以確認採用建議；執行器會重新取得報價、驗證漲跌停、資金及持倉。
           </p>
           <Button
-            disabled={
-              !enabled ||
-              !status.data?.configured ||
-              !config.symbols.some((i) => i.symbol === current.symbol) ||
-              analyze.isPending
-            }
+            disabled={!enabled || !status.data?.configured || analyze.isPending}
             onClick={() => analyze.mutate()}
           >
             {analyze.isPending ? "排入中…" : "分析目前股票"}
           </Button>
           <p className="panel-footnote">
-            僅支援既有六檔普通股。日線未還原權息，基本面尚非完整財報；即時資料缺漏時不自動委託。手動下單仍在交易工作台。
+            可分析資料來源支援的上市櫃普通股，不限原本六檔。日線未還原權息，基本面尚非完整財報；即時資料缺漏時不自動委託。手動下單仍在交易工作台。
           </p>
         </section>
       </div>

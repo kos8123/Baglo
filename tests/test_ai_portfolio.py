@@ -50,3 +50,23 @@ def test_swagger_contract_covers_ai_orders_and_portfolio():
     assert '/api/portfolio' in contract['paths'] and '/api/ai/jobs/{id}/execute' in contract['paths']
     assert contract['paths']['/api/orders']['post']['parameters'][0]['name']=='Idempotency-Key'
     assert contract['paths']['/api/account']['get']['security']
+
+
+def test_ai_pool_accepts_verified_stocks_beyond_original_six():
+    body={'enabled':False,'symbols':['6488','1101','2330','2317','2454','2308','2881','2882'],'budget':1000000,'min_confidence':.7}
+    assert ai.save_settings(new_account('paper'),body)[1]['symbols']==body['symbols']
+    for symbols in [['0050'],['6488','6488'],['not-a-stock']]:
+        with pytest.raises(DomainError):ai.save_settings(new_account('paper'),{**body,'symbols':symbols})
+
+
+def test_enqueue_accepts_registry_verified_otc_stock(tmp_path,monkeypatch):
+    monkeypatch.setenv('BAGLO_OPENAI_API_KEY','fixture-only')
+    monkeypatch.delenv('BAGLO_AI_WORKER',raising=False)
+    seen=[]
+    markets=SimpleNamespace(resolve=lambda symbol: seen.append(symbol) or {'symbol':symbol})
+    dispatched=[]
+    monkeypatch.setattr(ai,'_pool',SimpleNamespace(submit=lambda *args:dispatched.append(args)))
+    store=Store(path=str(tmp_path/'custom-universe.db'))
+    result=ai.enqueue(store,markets,'alice','6488')
+    assert seen==['6488'] and result['symbol']=='6488' and result['status']=='queued'
+    assert len(dispatched)==1

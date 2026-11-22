@@ -18,7 +18,7 @@
 - AWS SAM 模板：Lambda、HTTP API、Cognito、DynamoDB、私人 S3、CloudFront、排程與日誌。
 - AWS CodePipeline 設定檔：dev／main 分流、CodeBuild 驗證、正式區人工核准、部署 Lambda + S3；目前依要求不建立或啟用 AWS 資源。
 
-**目前仍沒有行情驅動的自動撮合。** 已加入 AI 三面向分析背景工作、推薦採用、每日自動模擬設定及保存紀錄，但需另設 OpenAI 後端金鑰才能呼叫模型；本機沒有每日排程。雲端日程的 IaC 已備妥但尚未部署或啟用，且帳戶必須加入排程名單及自行開啟授權。AI 建議只會透過獨立風控建立待成交模擬委託，不送券商真單、不把舊價假設為成交價。
+**目前仍沒有行情驅動的自動撮合。** 已加入 不限原六檔的 AI 三面向分析背景工作、推薦採用、每日自動模擬設定及保存紀錄，但需另設 OpenAI 後端金鑰才能呼叫模型；本機沒有每日排程。雲端日程的 IaC 已備妥但尚未部署或啟用，且帳戶必須加入排程名單及自行開啟授權。AI 建議只會透過獨立風控建立待成交模擬委託，不送券商真單、不把舊價假設為成交價。
 
 視覺方向參考 [RonDesignLab 的 E*TRADE 設計](https://dribbble.com/shots/21333645-E-TRADE-Online-Trading-Platform)：深色交易終端、低彩度邊框、三欄工作區與紅買綠賣按鈕；保留 Baglo 品牌，自行實作元件，沒有使用參考圖的品牌素材。
 
@@ -199,7 +199,9 @@ bash scripts/setup_codepipeline.sh '<GitHub Connection ARN>'
 - Swagger 位於 `/docs/index.html`，OpenAPI 位於 `/api/openapi.json`。UI 套件隨網站部署，不讀取或保存後端 API key；雲端測試只接受自己的 Cognito token。
 - 本機 `.env.local` 可另設 `BAGLO_OPENAI_API_KEY`、`BAGLO_OPENAI_MODEL`，重啟後生效。富果金鑰無法代替 OpenAI 金鑰。沒有模型金鑰仍可使用手動模擬。
 - AI 工作非同步執行，先取得公開技術／基本／籌碼快照並保存後才呼叫模型；不傳送帳戶餘額、持倉或個人資料給模型。輸出只包含動作、信心與理由，股數與價格由後端依預算重新計算。模型不得直接呼叫下單 API。
-- 每帳戶保留最近 12 筆完成工作及尚在處理工作；原始輸入快照留在本機 `data/ai-inputs/` 或雲端私人資料桶。不回填過去決策。工作逾時明示失敗，模型呼叫不自動重試。
+- 每帳戶保留近期完成工作、尚在處理工作及當日排程紀錄；原始輸入快照留在本機 `data/ai-inputs/` 或雲端私人資料桶。不回填過去決策。工作逾時明示失敗，模型呼叫不自動重試。
 - 雲端預備流程：08:30 分析、09:05 重新檢查當日分析與可信即時零股報價後建模擬單；非交易時段、休市舊價、低信心、缺資料或資金／持倉不符一律跳過。排程與帳戶授權雙重停用預設。
 
 [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)；[AWS CodePipeline](https://docs.aws.amazon.com/codepipeline/latest/userguide/pipeline-requirements.html)。本次沒有付費模型實測或 AWS 部署，不宣稱已驗證每日自動交易。
+
+AI 標的池現可透過搜尋加入任何資料來源已驗證的四碼上市櫃普通股，或加入目前選股；不再使用六檔白名單，也不限制標的池只能六檔。儲存新標的池時後端向來源登錄表驗證，分析時再次驗證。ETF、TDR、權證目前仍不在系統資料支援範圍。大量標的仍受資料額度、模型費用、排程時間與帳本容量約束；本機同時工作容量限制與股票白名單分開。AWS 維持未部署、未啟用。

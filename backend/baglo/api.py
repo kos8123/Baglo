@@ -98,7 +98,12 @@ def handler(event, context):
         if not isinstance(body, dict):
             raise DomainError('請求內容必須為 JSON object')
         if method == 'PUT' and path == '/api/ai/settings':
-            from .ai import save_settings
+            from .ai import save_settings, settings
+            # Validate the new universe once, outside optimistic ledger retries.
+            save_settings(get_store().read(account),body)
+            if body['symbols']!=settings(get_store().read(account))['symbols']:
+                for symbol in body['symbols']:
+                    get_markets().resolve(symbol)
             return response(200,get_store().mutate(account,lambda state:save_settings(state,body)))
         if method == 'POST' and path == '/api/ai/jobs':
             from .ai import enqueue

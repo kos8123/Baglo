@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useId } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, X } from "lucide-react";
 import { matchesInstrument } from "../selection";
@@ -10,11 +10,13 @@ export function StockSearch({
   onSelect,
   onDirty,
   enabled,
+  autoSelectExact = true,
 }: {
   selected: Instrument;
   onSelect: (item: Instrument) => void;
   onDirty: (value: boolean) => void;
   enabled: boolean;
+  autoSelectExact?: boolean;
 }) {
   const [text, setText] = useState(selected.symbol + " " + selected.name),
     [low, setLow] = useState(""),
@@ -25,6 +27,7 @@ export function StockSearch({
     [composing, setComposing] = useState(false);
   const box = useRef<HTMLDivElement>(null),
     input = useRef<HTMLInputElement>(null);
+  const id = useId();
   const label = selected.symbol + " " + selected.name;
   const matchesSelected = (value: string) => matchesInstrument(value, selected);
   useEffect(() => {
@@ -73,6 +76,7 @@ export function StockSearch({
   };
   useEffect(() => {
     if (
+      autoSelectExact &&
       open &&
       !composing &&
       debounced === search &&
@@ -89,18 +93,18 @@ export function StockSearch({
   };
   return (
     <div className="instrument-search" ref={box}>
-      <label htmlFor="stock-search">搜尋股票</label>
+      <label htmlFor={id}>搜尋股票</label>
       <div className="search-input">
         <Search size={17} />
         <input
-          id="stock-search"
+          id={id}
           type="search"
           role="combobox"
           aria-autocomplete="list"
-          aria-controls="stock-results"
+          aria-controls={id + "-results"}
           aria-expanded={open && !!items.length}
           aria-activedescendant={
-            active >= 0 ? "stock-option-" + active : undefined
+            active >= 0 ? id + "-option-" + active : undefined
           }
           value={text}
           placeholder="代號或股票名稱"
@@ -195,11 +199,11 @@ export function StockSearch({
               ? " · 部分來源不可用或為舊快取"
               : ""}
           </div>
-          <div id="stock-results" role="listbox" aria-label="股票搜尋結果">
+          <div id={id + "-results"} role="listbox" aria-label="股票搜尋結果">
             {items.map((item, i) => (
               <button
                 key={item.symbol}
-                id={"stock-option-" + i}
+                id={id + "-option-" + i}
                 data-result={i}
                 role="option"
                 aria-selected={active === i}

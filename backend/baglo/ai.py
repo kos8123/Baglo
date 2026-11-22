@@ -7,9 +7,10 @@ import hashlib
 from pathlib import Path
 import os
 import uuid
+import re
 from urllib.request import Request, urlopen
 from concurrent.futures import ThreadPoolExecutor
-from .domain import DomainError, UNIVERSE, now, place_order, stock_price_tick
+from .domain import DomainError, now, place_order, stock_price_tick
 
 _pool = ThreadPoolExecutor(max_workers=2)
 TZ = ZoneInfo('Asia/Taipei')
@@ -29,8 +30,8 @@ def save_settings(state, body):
     if set(body) != {'enabled','symbols','budget','min_confidence'} or type(body['enabled']) is not bool:
         raise DomainError('AI 設定欄位不正確')
     symbols = body['symbols']
-    if not isinstance(symbols,list) or not 1<=len(symbols)<=6 or len(set(symbols))!=len(symbols) or any(s not in UNIVERSE for s in symbols):
-        raise DomainError('AI 標的限既有六檔，請選 1～6 檔')
+    if not isinstance(symbols,list) or not symbols or any(not isinstance(s,str) or not re.fullmatch(r'[1-8]\d{3}',s) for s in symbols) or len(set(symbols))!=len(symbols):
+        raise DomainError('請加入有效且不重複的上市櫃普通股代號')
     if type(body['budget']) is not int or not 10000<=body['budget']<=30000000:
         raise DomainError('每筆 AI 模擬預算為 100～300,000 元')
     if type(body['min_confidence']) not in (float,int) or not .5<=body['min_confidence']<=1:
@@ -49,10 +50,9 @@ def update_job(store, account, job_id, values):
     return store.mutate(account,op)
 
 def enqueue(store,markets,account,symbol,source='manual'):
-    if symbol not in UNIVERSE:
-        raise DomainError('AI 目前限既有六檔普通股')
     if not configured():
         raise DomainError('尚未設定 OpenAI 後端金鑰；富果金鑰不等於模型金鑰',409)
+    markets.resolve(symbol)  # Verify against the provider registry, not a fixed watchlist.
     # A deterministic scheduled id prevents repeated paid inference on the same day.
     job_id=('daily-'+datetime.now(TZ).date().isoformat()+'-'+symbol) if source=='schedule' else str(uuid.uuid4())
     def op(state):
@@ -62,10 +62,12 @@ def enqueue(store,markets,account,symbol,source='manual'):
                 job.update(status='failed',error='工作逾時，未自動補執行，請重新分析')
         previous=next((j for j in jobs if j['id']==job_id),None)
         if previous:return state,{'job':previous,'new':False}
-        if sum(j['status'] in ('queued','running') for j in jobs)>=6:
+        if source!='schedule' and sum(j['status'] in ('queued','running') for j in jobs)>=6:
             raise DomainError('已有 AI 工作處理中，請稍候',409)
         job={'id':job_id,'symbol':symbol,'status':'queued','created_at':now(),'source':source}
-        state['ai_jobs']=[j for j in jobs if j['status'] in ('queued','running')]+[j for j in jobs if j['status'] not in ('queued','running')][-11:]+[job]
+        today=datetime.now(TZ).date()
+        keep=lambda j:j['status'] in ('queued','running') or (j.get('source')=='schedule' and datetime.fromisoformat(j['created_at']).astimezone(TZ).date()==today)
+        state['ai_jobs']=[j for j in jobs if keep(j)]+[j for j in jobs if not keep(j)][-11:]+[job]
         return state,{'job':job,'new':True}
     result=store.mutate(account,op)
     if result['new']:
