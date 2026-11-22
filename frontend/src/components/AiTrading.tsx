@@ -32,12 +32,14 @@ interface Status {
 }
 export function AiTrading({
   enabled,
+  mode = "analysis",
   config,
   current,
   notify,
   onAccepted,
 }: {
   enabled: boolean;
+  mode?: "analysis" | "automation";
   config: Config;
   current: Instrument;
   notify: (message: string, error?: boolean) => void;
@@ -74,7 +76,10 @@ export function AiTrading({
   }, [encoded, changed]);
   const save = useMutation({
     mutationFn: () =>
-      api("/ai/settings", { method: "PUT", body: JSON.stringify(policy) }),
+      api(mode === "automation" ? "/ai/automation/settings" : "/ai/settings", {
+        method: "PUT",
+        body: JSON.stringify(policy),
+      }),
     onSuccess: () => {
       client.setQueryData<Status>(["ai"], (old) =>
         old ? { ...old, settings: policy } : old,
@@ -125,7 +130,7 @@ export function AiTrading({
   return (
     <div className="ai-workspace">
       <div className="section-title">
-        <h1>AI 模擬交易</h1>
+        <h1>{mode === "automation" ? "AI 自動交易設定" : "AI 個股分析"}</h1>
         <span className="badge">只產生模擬委託・不連接券商</span>
       </div>
       <div className="notice">
@@ -178,68 +183,165 @@ export function AiTrading({
         <div className="inline-error">{status.error.message}</div>
       )}
       <div className="research-grid">
-        <section className="panel ai-settings">
-          <div className="panel-heading">
-            <h2>每日自動模擬</h2>
-          </div>
-          <label className="check-field">
-            <input
-              type="checkbox"
-              checked={policy.enabled}
-              onChange={(e) => (
-                setChanged(true),
-                setPolicy({ ...policy, enabled: e.target.checked })
-              )}
-            />
-            啟用每日 AI 自動模擬委託
-          </label>
-          <label className="field">
-            每筆 AI 預算（元）
-            <input
-              type="number"
-              min="100"
-              max="300000"
-              value={policy.budget / 100}
-              onChange={(e) => (
-                setChanged(true),
+        {mode === "automation" && (
+          <section className="panel ai-settings">
+            <div className="panel-heading">
+              <h2>自動選股與模擬委託</h2>
+            </div>
+            <label className="check-field">
+              <input
+                type="checkbox"
+                checked={policy.enabled}
+                onChange={(e) => (
+                  setChanged(true),
+                  setPolicy({ ...policy, enabled: e.target.checked })
+                )}
+              />
+              啟用每日 AI 自動模擬委託
+            </label>
+            <label className="field">
+              每筆 AI 預算（元）
+              <input
+                type="number"
+                min="100"
+                max="300000"
+                value={policy.budget / 100}
+                onChange={(e) => (
+                  setChanged(true),
+                  setPolicy({
+                    ...policy,
+                    budget: Math.round(Number(e.target.value) * 100),
+                  })
+                )}
+              />
+            </label>
+            <label className="field">
+              最低信心門檻（%，AI 至少多有把握才考慮下單）
+              <input
+                type="number"
+                min="50"
+                max="100"
+                step="5"
+                aria-describedby="confidence-help"
+                value={Math.round(policy.min_confidence * 100)}
+                onChange={(e) => (
+                  setChanged(true),
+                  setPolicy({
+                    ...policy,
+                    min_confidence: Number(e.target.value) / 100,
+                  })
+                )}
+              />
+            </label>
+            <p id="confidence-help" className="confidence-help">
+              目前設為{" "}
+              <strong>{Math.round(policy.min_confidence * 100)}%</strong>
+              ：AI 自評把握低於這個分數，就跳過這次委託。例如門檻 70%，自評 80%
+              可進一步檢查，自評 60% 就不下單。
+              <br />
+              <strong>這不是獲利機率。</strong>
+              設得高通常會少交易，但不保證比較準或比較賺；達門檻後仍要通過資金、持倉與行情檢查。AI
+              分數是否可靠需累積建議與結果驗證；AI 策略回測尚待完成。
+            </p>
+            <div className="ai-pool-search">
+              <label>加入自動模擬標的</label>
+              <StockSearch
+                autoSelectExact={false}
+                selected={analysisStock}
+                enabled={enabled}
+                onDirty={setSearchDirty}
+                onSelect={(item) => {
+                  setAnalysisStock(item);
+                  setSearchDirty(false);
+                  setNames((previous) => ({
+                    ...previous,
+                    [item.symbol]: item.name,
+                  }));
+                  setChanged(true);
+                  if (!policy.symbols.includes(item.symbol))
+                    setPolicy((previous) => ({
+                      ...previous,
+                      symbols: [...previous.symbols, item.symbol],
+                    }));
+                }}
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={
+                searchDirty || policy.symbols.includes(analysisStock.symbol)
+              }
+              onClick={() => {
+                setChanged(true);
                 setPolicy({
                   ...policy,
-                  budget: Math.round(Number(e.target.value) * 100),
-                })
-              )}
-            />
-          </label>
-          <label className="field">
-            最低信心門檻（%，AI 至少多有把握才考慮下單）
-            <input
-              type="number"
-              min="50"
-              max="100"
-              step="5"
-              aria-describedby="confidence-help"
-              value={Math.round(policy.min_confidence * 100)}
-              onChange={(e) => (
-                setChanged(true),
-                setPolicy({
-                  ...policy,
-                  min_confidence: Number(e.target.value) / 100,
-                })
-              )}
-            />
-          </label>
-          <p id="confidence-help" className="confidence-help">
-            目前設為 <strong>{Math.round(policy.min_confidence * 100)}%</strong>
-            ：AI 自評把握低於這個分數，就跳過這次委託。例如門檻 70%，自評 80%
-            可進一步檢查，自評 60% 就不下單。
-            <br />
-            <strong>這不是獲利機率。</strong>
-            設得高通常會少交易，但不保證比較準或比較賺；達門檻後仍要通過資金、持倉與行情檢查。AI
-            分數是否可靠需累積建議與結果驗證；AI 策略回測尚待完成。
-          </p>
-          <div className="ai-pool-search">
-            <label>加入自動模擬標的</label>
+                  symbols: [...policy.symbols, analysisStock.symbol],
+                });
+              }}
+            >
+              加入目前股票 {analysisStock.symbol} {analysisStock.name}
+            </Button>
+            <div className="ai-pool-list">
+              {policy.symbols.map((symbol) => (
+                <div key={symbol}>
+                  <span>
+                    {symbol}{" "}
+                    {names[symbol] ||
+                      config.symbols.find((i) => i.symbol === symbol)?.name ||
+                      (current.symbol === symbol ? current.name : "")}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={"移除 " + symbol}
+                    onClick={() => {
+                      setChanged(true);
+                      setPolicy({
+                        ...policy,
+                        symbols: policy.symbols.filter((s) => s !== symbol),
+                      });
+                    }}
+                  >
+                    移除
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={
+                      !enabled || !status.data?.configured || analyze.isPending
+                    }
+                    onClick={() => analyze.mutate(symbol)}
+                  >
+                    分析
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            <Button
+              disabled={!enabled || save.isPending}
+              onClick={() => {
+                if (policy.enabled && !status.data?.settings.enabled)
+                  setConfirm("enable");
+                else save.mutate();
+              }}
+            >
+              {changed ? "儲存設定（有未儲存變更）" : "儲存設定"}
+            </Button>
+            <p className="panel-footnote">
+              本機服務運行時，平日 08:30 起分析、09:05 起
+              驗證即時行情後送模擬單。每檔每天最多一次自動分析；13:20
+              後不新增分析。電腦休眠或服務停止時不會執行。假日、缺資料、觀望或風控不符則跳過，不補造決策。關閉設定可立即停止後續自動委託。
+            </p>
+          </section>
+        )}
+        {mode === "analysis" && (
+          <section className="panel ai-settings">
+            <div className="panel-heading">
+              <h2>AI 推薦交易</h2>
+            </div>
             <StockSearch
-              autoSelectExact={false}
               selected={analysisStock}
               enabled={enabled}
               onDirty={setSearchDirty}
@@ -250,122 +352,30 @@ export function AiTrading({
                   ...previous,
                   [item.symbol]: item.name,
                 }));
-                setChanged(true);
-                if (!policy.symbols.includes(item.symbol))
-                  setPolicy((previous) => ({
-                    ...previous,
-                    symbols: [...previous.symbols, item.symbol],
-                  }));
               }}
             />
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={
-              searchDirty || policy.symbols.includes(analysisStock.symbol)
-            }
-            onClick={() => {
-              setChanged(true);
-              setPolicy({
-                ...policy,
-                symbols: [...policy.symbols, analysisStock.symbol],
-              });
-            }}
-          >
-            加入目前股票 {analysisStock.symbol} {analysisStock.name}
-          </Button>
-          <div className="ai-pool-list">
-            {policy.symbols.map((symbol) => (
-              <div key={symbol}>
-                <span>
-                  {symbol}{" "}
-                  {names[symbol] ||
-                    config.symbols.find((i) => i.symbol === symbol)?.name ||
-                    (current.symbol === symbol ? current.name : "")}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label={"移除 " + symbol}
-                  onClick={() => {
-                    setChanged(true);
-                    setPolicy({
-                      ...policy,
-                      symbols: policy.symbols.filter((s) => s !== symbol),
-                    });
-                  }}
-                >
-                  移除
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={
-                    !enabled || !status.data?.configured || analyze.isPending
-                  }
-                  onClick={() => analyze.mutate(symbol)}
-                >
-                  分析
-                </Button>
-              </div>
-            ))}
-          </div>
-
-          <Button
-            disabled={!enabled || save.isPending}
-            onClick={() => {
-              if (policy.enabled && !status.data?.settings.enabled)
-                setConfirm("enable");
-              else save.mutate();
-            }}
-          >
-            {changed ? "儲存設定（有未儲存變更）" : "儲存設定"}
-          </Button>
-          <p className="panel-footnote">
-            本機服務運行時，平日 08:30 起分析、09:05 起
-            驗證即時行情後送模擬單。每檔每天最多一次自動分析；13:20
-            後不新增分析。電腦休眠或服務停止時不會執行。假日、缺資料、觀望或風控不符則跳過，不補造決策。關閉設定可立即停止後續自動委託。
-          </p>
-        </section>
-        <section className="panel ai-settings">
-          <div className="panel-heading">
-            <h2>AI 推薦交易</h2>
-          </div>
-          <StockSearch
-            selected={analysisStock}
-            enabled={enabled}
-            onDirty={setSearchDirty}
-            onSelect={(item) => {
-              setAnalysisStock(item);
-              setSearchDirty(false);
-              setNames((previous) => ({
-                ...previous,
-                [item.symbol]: item.name,
-              }));
-            }}
-          />
-          <h3>
-            {analysisStock.symbol} {analysisStock.name}
-          </h3>
-          <p className="panel-footnote">
-            按下後以最新可取得的公開資料分析三個面向。分析完成後，你可以確認採用建議；執行器會重新取得報價、驗證漲跌停、資金及持倉。
-          </p>
-          <Button
-            disabled={
-              !enabled ||
-              !status.data?.configured ||
-              analyze.isPending ||
-              searchDirty
-            }
-            onClick={() => analyze.mutate(analysisStock.symbol)}
-          >
-            {analyze.isPending ? "排入中…" : "分析目前股票"}
-          </Button>
-          <p className="panel-footnote">
-            可分析資料來源支援的上市櫃普通股，不限原本六檔。日線未還原權息，基本面尚非完整財報；即時資料缺漏時不自動委託。手動下單仍在交易工作台。
-          </p>
-        </section>
+            <h3>
+              {analysisStock.symbol} {analysisStock.name}
+            </h3>
+            <p className="panel-footnote">
+              按下後以最新可取得的公開資料分析三個面向。分析完成後，你可以確認採用建議；執行器會重新取得報價、驗證漲跌停、資金及持倉。
+            </p>
+            <Button
+              disabled={
+                !enabled ||
+                !status.data?.configured ||
+                analyze.isPending ||
+                searchDirty
+              }
+              onClick={() => analyze.mutate(analysisStock.symbol)}
+            >
+              {analyze.isPending ? "排入中…" : "分析目前股票"}
+            </Button>
+            <p className="panel-footnote">
+              可分析資料來源支援的上市櫃普通股，不限原本六檔。日線未還原權息，基本面尚非完整財報；即時資料缺漏時不自動委託。手動下單仍在交易工作台。
+            </p>
+          </section>
+        )}
       </div>
       <section className="panel">
         <div className="panel-heading">

@@ -13,7 +13,6 @@ import {
   RefreshCw,
   Bot,
   BriefcaseBusiness,
-  History as HistoryIcon,
 } from "lucide-react";
 import { api, dateLabel, initialize, login, logout, money, pct } from "./lib";
 import type {
@@ -30,6 +29,7 @@ import { PriceChart } from "./components/PriceChart";
 import { OrderTicket } from "./components/OrderTicket";
 import { Orders, Positions } from "./components/Orders";
 import { Portfolio } from "./components/Portfolio";
+import { AutoTrading } from "./components/AutoTrading";
 import { AiTrading } from "./components/AiTrading";
 import { Research } from "./components/Research";
 export default function App() {
@@ -66,6 +66,7 @@ function Terminal({ config }: { config: Config }) {
         "orders",
         "research",
         "ai",
+        "automation",
         "backtest",
       ].includes(value)
         ? value
@@ -85,9 +86,15 @@ function Terminal({ config }: { config: Config }) {
     const sync = () => {
       const value = location.hash.slice(1);
       if (
-        ["trade", "positions", "orders", "research", "ai", "backtest"].includes(
-          value,
-        )
+        [
+          "trade",
+          "positions",
+          "orders",
+          "research",
+          "ai",
+          "automation",
+          "backtest",
+        ].includes(value)
       )
         setView(value);
     };
@@ -197,8 +204,8 @@ function Terminal({ config }: { config: Config }) {
     { key: "research", label: "個股研究", icon: FlaskConical },
     { key: "positions", label: "我的持倉", icon: BriefcaseBusiness },
     { key: "orders", label: "委託紀錄", icon: ClipboardList },
-    { key: "ai", label: "AI 模擬交易", icon: Bot },
-    { key: "backtest", label: "AI 策略回測", icon: HistoryIcon },
+    { key: "ai", label: "AI 個股分析", icon: Bot },
+    { key: "automation", label: "AI 自動交易", icon: Activity },
   ];
   return (
     <div className="app-shell">
@@ -467,26 +474,14 @@ function Terminal({ config }: { config: Config }) {
               />
             </div>
           </div>
-          {view === "backtest" && (
-            <section className="panel">
-              <div className="panel-heading">
-                <h2>AI 策略回測</h2>
-                <span className="badge">先接通模型</span>
-              </div>
-              <p className="panel-footnote">
-                正確流程為：模型根據開發區間資料產生明確的進出場與風控規則 →
-                保存並凍結策略版本 → 系統在未提供給模型的歷史區間回測 →
-                比較費稅後績效與買入持有。你不需要自己設定均線參數。
-              </p>
-              <p className="panel-footnote">
-                目前 AI
-                既有功能是股票買／賣／觀望建議，還不是可回測的策略生成。AI
-                策略生成與回測串接尚未完成；先前固定規則引擎保留作內部驗證，已移除自訂表單入口。
-              </p>
-              <div className="backtest-actions">
-                <Button onClick={() => setView("ai")}>前往接通模型</Button>
-              </div>
-            </section>
+          {(view === "backtest" || view === "automation") && (
+            <AutoTrading
+              enabled={authorized}
+              config={config}
+              current={current}
+              notify={notify}
+              onAccepted={() => setReceipt(true)}
+            />
           )}
           {view === "positions" && (
             <Portfolio

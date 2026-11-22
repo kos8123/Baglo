@@ -11,8 +11,11 @@ def tick(store, markets, current=None):
     current=current or datetime.now(ZoneInfo('Asia/Taipei'))
     if current.weekday()>=5 or not (8,30)<=(current.hour,current.minute)<=(13,30):return
     account='local-demo'
-    policy=settings(store.read(account))
+    state=store.read(account)
+    policy=settings(state)
     if not policy['enabled']:return
+    if state.get('ai_selection_mode'):
+        return selection_tick(store,markets,account,current)
     for symbol in policy['symbols']:
         job_id='daily-'+current.date().isoformat()+'-'+symbol
         job=next((j for j in store.read(account).get('ai_jobs',[]) if j['id']==job_id),None)
@@ -24,6 +27,29 @@ def tick(store, markets, current=None):
         update_job(store,account,job_id,{'auto_attempted_at':current.isoformat()})
         try:execute(store,markets,account,job_id,automatic=True)
         except DomainError as exc:update_job(store,account,job_id,{'execution_note':str(exc)})
+
+
+def selection_tick(store,markets,account,current):
+    from .selection_research import start
+    from .backtest import read
+    from .ai import enqueue,execute,update_job
+    from .domain import DomainError
+    state=store.read(account)
+    report=read(account,state['ai_selection_job']) if state.get('ai_selection_job') else None
+    if not report or report.get('day')!=current.date().isoformat():
+        if (current.hour,current.minute)<(13,0):start(store,markets,account,'schedule')
+        return
+    symbol=report.get('selected_symbol')
+    if report['status']!='completed' or not symbol:return
+    job_id='daily-'+current.date().isoformat()+'-'+symbol
+    job=next((j for j in state.get('ai_jobs',[]) if j['id']==job_id),None)
+    if not job:
+        if (current.hour,current.minute)<(13,20):enqueue(store,markets,account,symbol,'schedule')
+        return
+    if job['status']!='completed' or job.get('order_id') or job.get('auto_attempted_at') or (current.hour,current.minute)<(9,5):return
+    update_job(store,account,job_id,{'auto_attempted_at':current.isoformat(),'selection_report_id':report['id']})
+    try:execute(store,markets,account,job_id,automatic=True)
+    except DomainError as exc:update_job(store,account,job_id,{'execution_note':str(exc)})
 
 
 def start():

@@ -40,8 +40,11 @@ def document():
       '/api/backtests/{id}':{'get':op('取得自己帳戶的回測狀態與結果',params=[param('id',where='path',required=True)])},
       '/api/ai':{'get':op('AI 設定、工作狀態與已保存的建議')},
       '/api/ai/test':{'post':op('實際模型連線與結構化輸出測試，會消耗少量模型額度，不產生委託')},
+      '/api/ai/automation':{'get':op('取得本帳戶最近 AI 策略回測選股結果；不回傳原始私有審計輸入')},
+      '/api/ai/automation/research':{'post':op('以已儲存候選池非同步產生 AI 策略並回測選股，每檔可能消耗一次模型額度',code='202')},
+      '/api/ai/automation/settings':{'put':op('儲存最多20檔候選池，切換為先回測選股再模擬委託的每日模式',schema=ref('AiSettings'),body=ref('AiSettings'))},
       '/api/ai/settings':{'put':op('儲存帳戶 AI 純模擬設定；啟用需另有模型金鑰',schema=ref('AiSettings'),body=ref('AiSettings'))},
-      '/api/ai/jobs':{'post':op('非同步建立三面向 AI 分析，可能產生 OpenAI API 費用',body={'type':'object','required':['symbol'],'properties':{'symbol':{'type':'string'}}},code='202')},
+      '/api/ai/jobs':{'post':op('非同步建立三面向 AI 分析，可能產生模型 API 費用',body={'type':'object','required':['symbol'],'properties':{'symbol':{'type':'string'}}},code='202')},
       '/api/ai/jobs/{id}/execute':{'post':op('將今日 AI 建議轉成模擬委託；需開市、可信即時報價與風控',schema=ref('Order'),params=[param('id',where='path',required=True)])},
     }
     return {'openapi':'3.0.3','info':{'title':'Baglo Paper Trading API','version':'0.3.0','description':'僅模擬交易。價格、費用與預算均以新臺幣分傳遞；股數一律為股。雲端需 Cognito access token；本機自動注入沙盒身分。'},'servers':[{'url':'/'}],'components':{'securitySchemes':{'BearerAuth':{'type':'http','scheme':'bearer','bearerFormat':'JWT'}},'schemas':schemas},'paths':paths}

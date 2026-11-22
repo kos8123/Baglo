@@ -98,7 +98,7 @@ def read(account,job_id):
         else:body=(Path('data')/key).read_bytes()
         job=json.loads(body)
     except Exception:raise DomainError('找不到此帳戶的回測紀錄',404)
-    if job['status'] in ('queued','running') and (datetime.now(timezone.utc)-datetime.fromisoformat(job['created_at'])).total_seconds()>900:
+    if job['status'] in ('queued','running') and (datetime.now(timezone.utc)-datetime.fromisoformat(job['created_at'])).total_seconds()>(7200 if job.get('kind')=='ai_selection' else 900):
         job.update(status='failed',error='回測逾時，請縮短區間或重新執行')
     return job
 

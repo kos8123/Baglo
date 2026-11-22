@@ -100,6 +100,25 @@ def handler(event, context):
         body = json.loads(raw)
         if not isinstance(body, dict):
             raise DomainError('請求內容必須為 JSON object')
+        if method == 'GET' and path == '/api/ai/automation':
+            from .backtest import read
+            from .selection_research import public
+            state=get_store().read(account)
+            job=public(read(account,state['ai_selection_job'])) if state.get('ai_selection_job') else None
+            return response(200,{'job':job,'selection_mode':state.get('ai_selection_mode',False)})
+        if method == 'POST' and path == '/api/ai/automation/research':
+            from .selection_research import start,public
+            return response(202,public(start(get_store(),get_markets(),account)))
+        if method == 'PUT' and path == '/api/ai/automation/settings':
+            from .ai import save_settings
+            save_settings(get_store().read(account),body)
+            if len(body['symbols'])>20:raise DomainError('單次自動研究最多 20 檔候選股票')
+            for symbol in body['symbols']:get_markets().resolve(symbol)
+            def save_selection(state):
+                changed,result=save_settings(state,body)
+                changed['ai_selection_mode']=True
+                return changed,result
+            return response(200,get_store().mutate(account,save_selection))
         if method == 'POST' and path == '/api/ai/test':
             from .ai import probe
             return response(200,probe())

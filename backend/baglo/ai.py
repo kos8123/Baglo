@@ -247,6 +247,10 @@ def execute(store,markets,account,job_id,automatic=False):
     if not job or job['status']!='completed':raise DomainError('分析尚未完成',409)
     if job.get('order_id'):return next(o for o in state['orders'] if o['id']==job['order_id'])
     decision=job['result'];policy=settings(state)
+    if automatic and state.get('ai_selection_mode'):
+        from .selection_research import validate_trade
+        if not job.get('selection_report_id') or job['selection_report_id']!=state.get('ai_selection_job'):raise DomainError('缺少本次 AI 選股回測依據，停止自動委託',409)
+        validate_trade(account,job['selection_report_id'],job['symbol'],decision['action'])
     if automatic and not policy['enabled']:raise DomainError('自動模擬已停用',409)
     if decision['action']=='hold' or decision['confidence']<policy['min_confidence']:raise DomainError('本次為觀望或信心未達門檻',409)
     current=datetime.now(TZ)
