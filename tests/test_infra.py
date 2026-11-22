@@ -19,6 +19,10 @@ def test_deployment_requires_identity_and_has_no_demo_or_public_bucket():
     assert api['Auth']['DefaultAuthorizer'] == 'Cognito'
     assert api['Auth']['Authorizers']['Cognito']['AuthorizationScopes'] == ['baglo-api/access']
     assert resources['Api']['Properties']['Environment']['Variables']['BAGLO_DEMO'] == '0'
+    assert resources['Users']['Properties']['AdminCreateUserConfig']['AllowAdminCreateUserOnly'] is False
+    events = resources['Api']['Properties']['Events']
+    for name in ['PublicInstruments', 'PublicMarket', 'PublicHistory']:
+        assert events[name]['Properties']['Auth']['Authorizer'] == 'NONE'
     for name in ['WebsiteBucket', 'ResearchBucket']:
         assert all(resources[name]['Properties']['PublicAccessBlockConfiguration'].values())
     assert template['Parameters']['PremarketScheduleState']['Default'] == 'DISABLED'

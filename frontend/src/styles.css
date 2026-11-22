@@ -1691,6 +1691,17 @@ footer {
 .app-rail nav .nav-docs:hover {
   background: #283340;
 }
+.app-rail nav button.locked {
+  color: #657487;
+}
+.app-rail nav button.locked:hover {
+  background: #222b35;
+  color: #9bafc5;
+}
+.app-rail nav .nav-lock {
+  margin-left: auto;
+  color: #718196;
+}
 .top-nav {
   display: none;
 }

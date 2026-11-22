@@ -149,7 +149,7 @@ Resources:
     Properties:
       UserPoolName: !Sub '${AWS::StackName}-users'
       UserPoolTier: ESSENTIALS
-      AdminCreateUserConfig: {AllowAdminCreateUserOnly: true}
+      AdminCreateUserConfig: {AllowAdminCreateUserOnly: false}
       LambdaConfig: !If
         - HasGoogle
         - PreSignUp: !GetAtt GoogleGuard.Arn
@@ -499,6 +499,30 @@ Resources:
           Properties:
             ApiId: !Ref HttpApi
             Path: /api/config
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth: {Authorizer: NONE}
+        PublicInstruments:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/instruments
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth: {Authorizer: NONE}
+        PublicMarket:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/market/{symbol}
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth: {Authorizer: NONE}
+        PublicHistory:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/history/{symbol}
             Method: GET
             PayloadFormatVersion: '2.0'
             Auth: {Authorizer: NONE}

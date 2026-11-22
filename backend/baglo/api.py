@@ -51,10 +51,9 @@ def handler(event, context):
             'symbols': [{'symbol': k, 'name': v} for k, v in UNIVERSE.items()],
             'capabilities': {'manual_orders': True, 'live_quote_matching': False,
                              'ai_recommendations': __import__('baglo.ai',fromlist=['configured']).configured(), 'ai_auto_trading': os.getenv('BAGLO_AI_SCHEDULE')=='ENABLED', 'ai_paper_workflow': True}})
-    account = event.get('requestContext', {}).get('authorizer', {}).get('jwt', {}).get('claims', {}).get('sub')
-    if not account:
-        return response(401, {'error': '請先登入'})
     try:
+        # Read-only market data is intentionally public. Account, research, AI and
+        # order routes remain behind the API Gateway authorizer and this guard.
         if method == 'GET' and path == '/api/instruments':
             params = event.get('queryStringParameters') or {}
             def price_filter(key):
@@ -69,12 +68,6 @@ def handler(event, context):
             if low is not None and high is not None and low > high:
                 raise DomainError('最低價格不能高於最高價格')
             return response(200, get_markets().search(params.get('q', ''), low, high))
-        if method == 'GET' and path.startswith('/api/backtests/'):
-            from .backtest import read
-            return response(200,read(account,path.rsplit('/',1)[-1]))
-        if method == 'GET' and path == '/api/ai':
-            from .ai import status
-            return response(200,status(get_store().read(account)))
         parts = path.strip('/').split('/')
         if method == 'GET' and len(parts) == 3 and parts[:2] == ['api', 'market']:
             params = event.get('queryStringParameters') or {}
@@ -86,6 +79,16 @@ def handler(event, context):
             except (TypeError, ValueError):
                 raise DomainError('歷史月份範圍必須是整數')
             return response(200, get_markets().history(parts[2], months=months, offset_months=offset))
+
+        account = event.get('requestContext', {}).get('authorizer', {}).get('jwt', {}).get('claims', {}).get('sub')
+        if not account:
+            return response(401, {'error': '請先登入'})
+        if method == 'GET' and path.startswith('/api/backtests/'):
+            from .backtest import read
+            return response(200,read(account,path.rsplit('/',1)[-1]))
+        if method == 'GET' and path == '/api/ai':
+            from .ai import status
+            return response(200,status(get_store().read(account)))
         if method == 'GET' and len(parts) == 3 and parts[:2] == ['api', 'research']:
             service = get_markets()
             return response(200, {'symbol': parts[2], 'fundamentals': service.fundamentals(parts[2]), 'ownership': service.ownership(parts[2])})

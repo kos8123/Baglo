@@ -170,7 +170,7 @@ def test_server_rejects_invalid_price_tick():
     body={'symbol':'2330','side':'buy','quantity':1,'limit_price':200001}
     with pytest.raises(DomainError,match='升降單位'):place_order(new_account('paper'),body,'bad-tick')
 
-def test_market_routes_require_auth_and_filter_validation(service,monkeypatch):
+def test_market_routes_are_public_but_research_requires_auth(service,monkeypatch):
     monkeypatch.setattr(api,'_markets',service)
     base={'requestContext':{'http':{'method':'GET'},'authorizer':{'jwt':{'claims':{'sub':'alice'}}}},'rawPath':'/api/instruments','queryStringParameters':{'q':'環球晶'}}
     result=api.handler(base,None)
@@ -178,6 +178,15 @@ def test_market_routes_require_auth_and_filter_validation(service,monkeypatch):
     base['queryStringParameters']={'min_price':'500','max_price':'100'}
     assert api.handler(base,None)['statusCode']==422
     base['requestContext'].pop('authorizer')
+    base['queryStringParameters']={'q':'環球晶'}
+    assert api.handler(base,None)['statusCode']==200
+    base['rawPath']='/api/history/6488'
+    base['queryStringParameters']={'months':'1','offset':'0'}
+    assert api.handler(base,None)['statusCode']==200
+    base['rawPath']='/api/market/6488'
+    base['queryStringParameters']={'market_type':'odd_lot'}
+    assert api.handler(base,None)['statusCode']==200
+    base['rawPath']='/api/research/6488'
     assert api.handler(base,None)['statusCode']==401
 
 

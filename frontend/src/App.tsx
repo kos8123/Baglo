@@ -7,6 +7,7 @@ import {
   FlaskConical,
   LogIn,
   LogOut,
+  LockKeyhole,
   Wallet,
   X,
   ArrowRight,
@@ -20,7 +21,6 @@ import type {
   History,
   Instrument,
   Research as ResearchData,
-  SearchResult,
 } from "./types";
 import { Button } from "./components/ui/button";
 import { StockSearch } from "./components/StockSearch";
@@ -95,14 +95,26 @@ function Terminal({ config }: { config: Config }) {
           "automation",
           "backtest",
         ].includes(value)
-      )
-        setView(value);
+      ) {
+        if (!authorized && value !== "trade") setView("trade");
+        else setView(value);
+      }
     };
     window.addEventListener("hashchange", sync);
     return () => window.removeEventListener("hashchange", sync);
-  }, []);
+  }, [authorized]);
   const notify = (message: string, error = false) =>
     setToast({ message, error });
+  const chooseView = (next: string) => {
+    if (!authorized && next !== "trade") {
+      notify("請先登入或建立帳戶，再使用模擬下單、持倉、AI 與回測功能。", true);
+      return;
+    }
+    setView(next);
+  };
+  useEffect(() => {
+    if (!authorized && view !== "trade") setView("trade");
+  }, [authorized, view]);
   useEffect(() => {
     const expire = () => {
       setAuthorized(false);
@@ -121,22 +133,15 @@ function Terminal({ config }: { config: Config }) {
     queryFn: ({ signal }) => api<Account>("/account", { signal }),
     enabled: authorized,
   });
-  const registry = useQuery({
-    queryKey: ["watchlist"],
-    queryFn: ({ signal }) => api<SearchResult>("/instruments", { signal }),
-    enabled: authorized,
-    staleTime: 60000,
-  });
   const instruments = useMemo(() => {
     const map = new Map<string, Instrument>();
     for (const i of [
       ...config.symbols,
-      ...(registry.data?.items || []),
       ...picked,
     ])
       map.set(i.symbol, { ...map.get(i.symbol), ...i });
     return [...map.values()];
-  }, [config.symbols, registry.data, picked]);
+  }, [config.symbols, picked]);
   const current =
     instruments.find((i) => i.symbol === selected.symbol) || selected;
   const select = (item: Instrument) => {
@@ -156,25 +161,10 @@ function Terminal({ config }: { config: Config }) {
     initialPageParam: 0,
     getNextPageParam: (_last, pages) =>
       pages.length * 6 < 120 ? pages.length * 6 : undefined,
-    enabled: authorized,
+    enabled: true,
     staleTime: 6 * 3600000,
     gcTime: 30 * 60000,
   });
-  useEffect(() => {
-    if (
-      authorized &&
-      history.data &&
-      history.data.pages.length < 6 &&
-      !history.isFetching &&
-      !history.isError
-    )
-      void history.fetchNextPage();
-  }, [
-    authorized,
-    history.data?.pages.length,
-    history.isFetching,
-    history.isError,
-  ]);
   const bars = useMemo(() => {
     const map = new Map();
     for (const page of history.data?.pages || [])
@@ -219,11 +209,15 @@ function Terminal({ config }: { config: Config }) {
               title={label}
               aria-label={label}
               aria-current={view === key ? "page" : undefined}
-              className={view === key ? "active" : ""}
-              onClick={() => setView(key)}
+              className={`${view === key ? "active" : ""}${!authorized && key !== "trade" ? " locked" : ""}`}
+              aria-disabled={!authorized && key !== "trade"}
+              onClick={() => chooseView(key)}
             >
               <Icon size={21} />
               <span>{label}</span>
+              {!authorized && key !== "trade" && (
+                <LockKeyhole className="nav-lock" size={12} />
+              )}
             </button>
           ))}
         </nav>
@@ -296,14 +290,14 @@ function Terminal({ config }: { config: Config }) {
           </div>
           {!authorized && (
             <div className="notice">
-              <span>請先登入，開啟你的模擬帳戶。</span>
+              <span>訪客可查看股價與 K 線；登入或建立帳戶後，可使用模擬下單、持倉、AI 與回測。</span>
               <Button
                 size="sm"
                 onClick={() =>
                   void login(config).catch((e) => notify(e.message, true))
                 }
               >
-                登入
+                登入／建立帳戶
               </Button>
             </div>
           )}
@@ -337,7 +331,7 @@ function Terminal({ config }: { config: Config }) {
                 selected={current}
                 onSelect={select}
                 onDirty={setDirty}
-                enabled={authorized}
+                enabled={true}
               />
             </div>
           )}
@@ -371,9 +365,6 @@ function Terminal({ config }: { config: Config }) {
                       </button>
                     ))}
                 </div>
-                {registry.error && (
-                  <p className="inline-error">清單行情暫不可用</p>
-                )}
                 <div className="watchlist-note">
                   上市櫃普通股
                   <br />
@@ -429,7 +420,7 @@ function Terminal({ config }: { config: Config }) {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setView("research")}
+                      onClick={() => chooseView("research")}
                     >
                       研究 <ArrowRight size={13} />
                     </Button>
