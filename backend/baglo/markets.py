@@ -332,7 +332,7 @@ class MarketService:
         instrument = self.resolve(symbol)
         current = self.clock().astimezone(TZ).date()
         bars, warnings = {}, []
-        for offset in range(offset_months, offset_months+months):
+        def load_month(offset):
             month_index = current.year*12 + current.month-1-offset
             year, month = divmod(month_index, 12)
             stamp = f'{year:04}{month+1:02}01'
@@ -363,6 +363,7 @@ class MarketService:
                 if payload.get('stat') != 'OK' or not payload.get('data'):
                     raise DataUnavailable('歷史月份資料尚未提供')
                 return payload
+            month_bars, month_warnings = {}, []
             try:
                 cached = self.cache.get('history:'+('TPEx:' if instrument['exchange'] == 'TPEx' else '')+symbol+':'+stamp, load, ttl=6*3600)
                 data = cached['data']
@@ -376,13 +377,19 @@ class MarketService:
                     if any(v is None for v in prices.values()) or not prices['low'] <= prices['close'] <= prices['high']:
                         continue
                     volume = number(row[indexes['成交股數']])
-                    bars[day] = {'date': day, **prices, 'volume': int(volume) if volume is not None else None}
+                    month_bars[day] = {'date': day, **prices, 'volume': int(volume) if volume is not None else None}
                 if cached['stale_cache']:
-                    warnings.append(stamp+' 使用快取')
+                    month_warnings.append(stamp+' 使用快取')
             except (DataUnavailable, KeyError, ValueError, IndexError):
-                warnings.append(stamp+' 暫無資料')
-            if offset < offset_months+months-1:
-                time.sleep(0.25)
+                month_warnings.append(stamp+' 暫無資料')
+            return month_bars, month_warnings
+        # Monthly official endpoints are independent. A small bounded pool avoids
+        # making the chart wait for every network round trip in sequence.
+        with ThreadPoolExecutor(max_workers=min(3, months)) as pool:
+            results = list(pool.map(load_month, range(offset_months, offset_months+months)))
+        for month_bars, month_warnings in results:
+            bars.update(month_bars)
+            warnings.extend(month_warnings)
         ordered = sorted(bars.values(), key=lambda b: b['date'])
         def sma(count):
             return round(sum(b['close'] for b in ordered[-count:])/count) if len(ordered) >= count else None

@@ -155,12 +155,12 @@ function Terminal({ config }: { config: Config }) {
     queryKey: ["history", current.symbol],
     queryFn: ({ pageParam, signal }) =>
       api<History>(
-        "/history/" + current.symbol + "?months=6&offset=" + pageParam,
+        "/history/" + current.symbol + "?months=3&offset=" + pageParam,
         { signal },
       ),
     initialPageParam: 0,
     getNextPageParam: (_last, pages) =>
-      pages.length * 6 < 120 ? pages.length * 6 : undefined,
+      pages.length * 3 < 120 ? pages.length * 3 : undefined,
     enabled: true,
     staleTime: 6 * 3600000,
     gcTime: 30 * 60000,
