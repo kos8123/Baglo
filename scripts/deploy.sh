@@ -9,10 +9,16 @@ case "$ENVIRONMENT" in dev|prod) ;; *) exit 2;; esac
 STACK="baglo-$ENVIRONMENT"
 RELEASE=$(python3 scripts/release_manifest.py verify)
 sam build --template-file infra/template.yaml
+PARAMETERS=("Environment=$ENVIRONMENT" "PremarketScheduleState=${BAGLO_AI_SCHEDULE:-DISABLED}" "GeminiModel=${BAGLO_GEMINI_MODEL:-gemini-3.5-flash-lite}" "ReleaseId=$RELEASE" "OpenAIModel=${BAGLO_OPENAI_MODEL:-gpt-4.1-mini}")
+# SAM rejects Key= with an empty value. Omitted optional values use template defaults
+# on first deployment and preserve existing parameters on subsequent deployments.
+for PAIR in "FugleSecretArn=${BAGLO_FUGLE_SECRET_ARN:-}" "GeminiSecretArn=${BAGLO_GEMINI_SECRET_ARN:-}" "OpenAISecretArn=${BAGLO_OPENAI_SECRET_ARN:-}" "AiAccounts=${BAGLO_AI_ACCOUNTS:-}"; do
+  [[ -z "${PAIR#*=}" ]] || PARAMETERS+=("$PAIR")
+done
 sam deploy --stack-name "$STACK" --region "$AWS_REGION" \
   --s3-bucket "$BAGLO_ARTIFACT_BUCKET" --capabilities CAPABILITY_IAM \
   --role-arn "$BAGLO_CFN_ROLE_ARN" \
-  --parameter-overrides "Environment=$ENVIRONMENT" "PremarketScheduleState=${BAGLO_AI_SCHEDULE:-DISABLED}" "FugleSecretArn=${BAGLO_FUGLE_SECRET_ARN:-}" "GeminiSecretArn=${BAGLO_GEMINI_SECRET_ARN:-}" "GeminiModel=${BAGLO_GEMINI_MODEL:-gemini-3.5-flash-lite}" "ReleaseId=$RELEASE" "OpenAISecretArn=${BAGLO_OPENAI_SECRET_ARN:-}" "OpenAIModel=${BAGLO_OPENAI_MODEL:-gpt-4.1-mini}" "AiAccounts=${BAGLO_AI_ACCOUNTS:-}" \
+  --parameter-overrides "${PARAMETERS[@]}" \
   --no-confirm-changeset --no-fail-on-empty-changeset
 OUTPUT_FILE=$(mktemp)
 HEALTH_FILE=$(mktemp)
