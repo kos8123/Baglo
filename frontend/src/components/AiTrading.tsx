@@ -32,14 +32,12 @@ interface Status {
 }
 export function AiTrading({
   enabled,
-  mode = "analysis",
   config,
   current,
   notify,
   onAccepted,
 }: {
   enabled: boolean;
-  mode?: "analysis" | "automation";
   config: Config;
   current: Instrument;
   notify: (message: string, error?: boolean) => void;
@@ -76,7 +74,7 @@ export function AiTrading({
   }, [encoded, changed]);
   const save = useMutation({
     mutationFn: () =>
-      api(mode === "automation" ? "/ai/automation/settings" : "/ai/settings", {
+      api("/ai/automation/settings", {
         method: "PUT",
         body: JSON.stringify(policy),
       }),
@@ -88,18 +86,6 @@ export function AiTrading({
       setChanged(false);
       void client.invalidateQueries({ queryKey: ["ai"] });
       notify("AI 模擬設定已儲存");
-    },
-    onError: (e: Error) => notify(e.message, true),
-  });
-  const analyze = useMutation({
-    mutationFn: (symbol: string) =>
-      api("/ai/jobs", {
-        method: "POST",
-        body: JSON.stringify({ symbol }),
-      }),
-    onSuccess: () => {
-      void client.invalidateQueries({ queryKey: ["ai"] });
-      notify("AI 分析已排入，完成後顯示建議");
     },
     onError: (e: Error) => notify(e.message, true),
   });
@@ -128,24 +114,25 @@ export function AiTrading({
     onError: (error: Error) => notify(error.message, true),
   });
   return (
-    <div className="ai-workspace">
-      <div className="section-title">
-        <h1>{mode === "automation" ? "AI 自動交易設定" : "AI 個股分析"}</h1>
-        <span className="badge">只產生模擬委託・不連接券商</span>
-      </div>
-      <div className="notice">
+    <div className="automation-controls">
+      <div className="notice automation-status">
         <span>
-          {status.data?.configured
-            ? `模型 ${status.data.model} 已設定`
-            : "尚未設定 Gemini 模型金鑰（富果金鑰只提供行情）"}
+          {status.isPending
+            ? "正在讀取模型與排程狀態…"
+            : status.error
+              ? "模型狀態讀取失敗，請重試"
+              : status.data?.configured
+                ? `模型 ${status.data.model} 已設定`
+                : "尚未設定 Gemini 模型金鑰（富果金鑰只提供行情）"}
           <br />
-          {status.data?.schedule_configured
-            ? "每日排程已就緒；儲存啟用設定後才會自動執行。"
-            : "每日排程尚未啟動，目前僅可手動分析。"}
+          {status.isPending || status.error
+            ? ""
+            : status.data?.schedule_configured
+              ? "每日排程已就緒；儲存啟用設定後才會自動執行。"
+              : "每日排程尚未啟動，目前僅可手動分析。"}
           <br />
-          分析使用公開技術／基本／籌碼資料，會呼叫 Gemini；免費額度依 Google
-          專案設定，超額即停止，不自動切換模型。AI
-          建議不保證獲利，委託不自動成交。
+          分析使用公開技術／基本／籌碼資料，會呼叫 Gemini；費用與配額依 Google
+          專案設定，不自動切換模型。AI 建議不保證獲利，委託不自動成交。
         </span>
       </div>
       <section className="panel ai-connection">
@@ -154,9 +141,7 @@ export function AiTrading({
           <span className="badge">Gemini API</span>
         </div>
         <p className="panel-footnote">
-          先在本機 .env.local 填入 BAGLO_GEMINI_API_KEY，模型設定為
-          BAGLO_GEMINI_MODEL，重啟後再測試。金鑰不放前端，也不要貼到聊天室。測試會發出一個簡短請求，消耗少量
-          API 額度，但不分析股票、不建立委託。
+          模型供應商為 Gemini。連線測試會使用少量 API 額度，不建立委託。
         </p>
         <div className="backtest-actions">
           <Button
@@ -182,11 +167,11 @@ export function AiTrading({
       {status.error && (
         <div className="inline-error">{status.error.message}</div>
       )}
-      <div className="research-grid">
-        {mode === "automation" && (
+      <>
+        {
           <section className="panel ai-settings">
             <div className="panel-heading">
-              <h2>自動選股與模擬委託</h2>
+              <h2>交易設定與候選池</h2>
             </div>
             <label className="check-field">
               <input
@@ -241,7 +226,7 @@ export function AiTrading({
               <br />
               <strong>這不是獲利機率。</strong>
               設得高通常會少交易，但不保證比較準或比較賺；達門檻後仍要通過資金、持倉與行情檢查。AI
-              分數是否可靠需累積建議與結果驗證；AI 策略回測尚待完成。
+              分數是否可靠需累積建議與結果驗證；可在下方回測比較驗證績效。
             </p>
             <div className="ai-pool-search">
               <label>加入自動模擬標的</label>
@@ -305,16 +290,6 @@ export function AiTrading({
                   >
                     移除
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={
-                      !enabled || !status.data?.configured || analyze.isPending
-                    }
-                    onClick={() => analyze.mutate(symbol)}
-                  >
-                    分析
-                  </Button>
                 </div>
               ))}
             </div>
@@ -331,53 +306,13 @@ export function AiTrading({
             </Button>
             <p className="panel-footnote">
               本機服務運行時，平日 08:30 起分析、09:05 起
-              驗證即時行情後送模擬單。每檔每天最多一次自動分析；13:20
-              後不新增分析。電腦休眠或服務停止時不會執行。假日、缺資料、觀望或風控不符則跳過，不補造決策。關閉設定可立即停止後續自動委託。
+              驗證即時行情後送模擬單。每日先回測候選池，至多選出一檔，再分析當日訊號；未達條件就保留現金。13:00
+              後不啟動新選股研究。電腦休眠或服務停止時不會執行。假日、缺資料、觀望或風控不符則跳過，不補造決策。關閉設定可立即停止後續自動委託。
             </p>
           </section>
-        )}
-        {mode === "analysis" && (
-          <section className="panel ai-settings">
-            <div className="panel-heading">
-              <h2>AI 推薦交易</h2>
-            </div>
-            <StockSearch
-              selected={analysisStock}
-              enabled={enabled}
-              onDirty={setSearchDirty}
-              onSelect={(item) => {
-                setAnalysisStock(item);
-                setSearchDirty(false);
-                setNames((previous) => ({
-                  ...previous,
-                  [item.symbol]: item.name,
-                }));
-              }}
-            />
-            <h3>
-              {analysisStock.symbol} {analysisStock.name}
-            </h3>
-            <p className="panel-footnote">
-              按下後以最新可取得的公開資料分析三個面向。分析完成後，你可以確認採用建議；執行器會重新取得報價、驗證漲跌停、資金及持倉。
-            </p>
-            <Button
-              disabled={
-                !enabled ||
-                !status.data?.configured ||
-                analyze.isPending ||
-                searchDirty
-              }
-              onClick={() => analyze.mutate(analysisStock.symbol)}
-            >
-              {analyze.isPending ? "排入中…" : "分析目前股票"}
-            </Button>
-            <p className="panel-footnote">
-              可分析資料來源支援的上市櫃普通股，不限原本六檔。日線未還原權息，基本面尚非完整財報；即時資料缺漏時不自動委託。手動下單仍在交易工作台。
-            </p>
-          </section>
-        )}
-      </div>
-      <section className="panel">
+        }
+      </>
+      <section className="panel automation-log">
         <div className="panel-heading">
           <h2>分析與執行紀錄</h2>
           <Button

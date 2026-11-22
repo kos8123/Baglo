@@ -11,7 +11,6 @@ import {
   X,
   ArrowRight,
   RefreshCw,
-  Bot,
   BriefcaseBusiness,
 } from "lucide-react";
 import { api, dateLabel, initialize, login, logout, money, pct } from "./lib";
@@ -30,7 +29,6 @@ import { OrderTicket } from "./components/OrderTicket";
 import { Orders, Positions } from "./components/Orders";
 import { Portfolio } from "./components/Portfolio";
 import { AutoTrading } from "./components/AutoTrading";
-import { AiTrading } from "./components/AiTrading";
 import { Research } from "./components/Research";
 export default function App() {
   const init = useQuery({
@@ -59,7 +57,8 @@ function Terminal({ config }: { config: Config }) {
     ),
     [selected, setSelected] = useState<Instrument>(config.symbols[0]),
     [view, setView] = useState(() => {
-      const value = location.hash.slice(1);
+      const hash = location.hash.slice(1);
+      const value = ["ai", "backtest"].includes(hash) ? "automation" : hash;
       return [
         "trade",
         "positions",
@@ -84,7 +83,8 @@ function Terminal({ config }: { config: Config }) {
   }, [view]);
   useEffect(() => {
     const sync = () => {
-      const value = location.hash.slice(1);
+      const hash = location.hash.slice(1);
+      const value = ["ai", "backtest"].includes(hash) ? "automation" : hash;
       if (
         [
           "trade",
@@ -204,7 +204,6 @@ function Terminal({ config }: { config: Config }) {
     { key: "research", label: "個股研究", icon: FlaskConical },
     { key: "positions", label: "我的持倉", icon: BriefcaseBusiness },
     { key: "orders", label: "委託紀錄", icon: ClipboardList },
-    { key: "ai", label: "AI 個股分析", icon: Bot },
     { key: "automation", label: "AI 自動交易", icon: Activity },
   ];
   return (
@@ -320,26 +319,28 @@ function Terminal({ config }: { config: Config }) {
               </Button>
             </div>
           )}
-          <div className="symbol-bar">
-            <div className="symbol-heading">
-              <span className="market-tag">
-                {current.exchange === "TPEx" ? "TPEx" : "TWSE"}
-              </span>
-              <h1>
-                {current.symbol} <span>{current.name}</span>
-              </h1>
-              <div className="daily-close">
-                <strong>{money(current.price)}</strong>
-                <small>最近收盤 {current.as_of || "—"}</small>
+          {["trade", "research"].includes(view) && (
+            <div className="symbol-bar">
+              <div className="symbol-heading">
+                <span className="market-tag">
+                  {current.exchange === "TPEx" ? "TPEx" : "TWSE"}
+                </span>
+                <h1>
+                  {current.symbol} <span>{current.name}</span>
+                </h1>
+                <div className="daily-close">
+                  <strong>{money(current.price)}</strong>
+                  <small>最近收盤 {current.as_of || "—"}</small>
+                </div>
               </div>
+              <StockSearch
+                selected={current}
+                onSelect={select}
+                onDirty={setDirty}
+                enabled={authorized}
+              />
             </div>
-            <StockSearch
-              selected={current}
-              onSelect={select}
-              onDirty={setDirty}
-              enabled={authorized}
-            />
-          </div>
+          )}
           <div hidden={view !== "trade"}>
             <div className="terminal-grid">
               <section className="panel watchlist-panel">
@@ -490,15 +491,6 @@ function Terminal({ config }: { config: Config }) {
                 select(item);
                 setView("trade");
               }}
-            />
-          )}
-          {view === "ai" && (
-            <AiTrading
-              enabled={authorized}
-              config={config}
-              current={current}
-              notify={notify}
-              onAccepted={() => setReceipt(true)}
             />
           )}
           {view === "research" && (

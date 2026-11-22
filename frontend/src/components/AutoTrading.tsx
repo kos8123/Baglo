@@ -76,10 +76,18 @@ export function AutoTrading(props: {
   const job = report.data?.job;
   const busy = !!job && ["queued", "running"].includes(job.status);
   return (
-    <div className="ai-workspace">
-      <section className="panel">
-        <div className="panel-heading">
+    <div className="automation-page">
+      <header className="automation-header">
+        <div>
           <h1>AI 自動交易</h1>
+          <p>設定候選池，讓 AI 產生策略、回測選股，再執行模擬委託。</p>
+        </div>
+        <span className="badge">PAPER TRADING</span>
+      </header>
+      <AiTrading {...props} />
+      <section className="panel automation-research">
+        <div className="panel-heading">
+          <h2>策略回測與選股</h2>
           <span className="badge">僅限模擬</span>
         </div>
         <p className="panel-footnote">
@@ -87,7 +95,7 @@ export function AutoTrading(props: {
           當日技術／基本／籌碼分析 → 風控 → 模擬委託。
         </p>
         <div className="notice">
-          先在下方加入候選股票並儲存，再開始研究。最多 20
+          先在上方加入候選股票並儲存，再開始研究。最多 20
           檔，每檔需一次模型策略請求；選中後還需一次當日分析。手動研究不會自行啟用每日交易。委託尚不會自動撮合成交。
         </div>
         <div className="backtest-actions">
@@ -123,7 +131,7 @@ export function AutoTrading(props: {
                 : "研究期間不新增自動委託"}
             </h2>
             {job.error && <p className="inline-error">{job.error}</p>}
-            <div style={{ overflowX: "auto" }}>
+            <div className="automation-table-scroll">
               <table>
                 <thead>
                   <tr>
@@ -225,11 +233,10 @@ export function AutoTrading(props: {
         )}
       </section>
       {!report.data?.selection_mode && (
-        <p className="notice">
-          請先儲存下方設定，才會切換為「回測選股後交易」模式；啟用與否依勾選結果生效。
+        <p className="notice automation-mode-note">
+          請先儲存上方設定，才會切換為「回測選股後交易」模式；啟用與否依勾選結果生效。
         </p>
       )}
-      <AiTrading {...props} mode="automation" />
     </div>
   );
 }
