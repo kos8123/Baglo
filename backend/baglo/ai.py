@@ -167,7 +167,7 @@ def gemini_response(body, timeout):
     try:
         with urlopen(request,timeout=timeout) as response:data=json.loads(response.read(2000000))
     except HTTPError as error:
-        messages={429:'Gemini API 配額不足或請求過快，請稍後再試；未自動重試或切換付費模型。',400:'Gemini 請求遭拒，請檢查金鑰、地區及模型參數。',401:'Gemini 金鑰驗證失敗。',403:'Gemini 金鑰或專案權限不足。',404:'Gemini 模型不可用。'}
+        messages={402:'Gemini API 回傳 402，請檢查專案帳務、餘額與免費層資格；切換模型未能解除限制。',429:'Gemini API 配額不足或請求過快，請稍後再試；未自動重試或切換付費模型。',400:'Gemini 請求遭拒，請檢查金鑰、地區及模型參數。',401:'Gemini 金鑰驗證失敗。',403:'Gemini 金鑰或專案權限不足。',404:'Gemini 模型不可用。'}
         raise ModelError(messages.get(error.code,'Gemini 服務暫時不可用。')+' 未建立委託。','gemini_http_'+str(error.code)) from None
     except (URLError,TimeoutError):raise ModelError('Gemini 連線逾時，未自動重試、未建立委託。','model_timeout') from None
     except ValueError:raise ModelError('Gemini 回應無法解析。','invalid_provider_json') from None
