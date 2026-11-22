@@ -26,7 +26,7 @@ def current_model():
     return (os.getenv('BAGLO_GEMINI_MODEL') or DEFAULT_MODEL) if provider()=='gemini' else (os.getenv('BAGLO_OPENAI_MODEL') or 'gpt-4.1-mini')
 
 def configured():
-    return bool(os.getenv('BAGLO_GEMINI_API_KEY')) if provider()=='gemini' else bool(os.getenv('BAGLO_OPENAI_API_KEY') or os.getenv('BAGLO_OPENAI_SECRET_ARN'))
+    return bool(os.getenv('BAGLO_GEMINI_API_KEY') or os.getenv('GEMINI_API_KEY')) if provider()=='gemini' else bool(os.getenv('BAGLO_OPENAI_API_KEY') or os.getenv('BAGLO_OPENAI_SECRET_ARN'))
 
 def settings(state):
     return state.get('ai_settings', {'enabled':False, 'symbols':['2330'], 'budget':1000000, 'min_confidence':0.7})
@@ -163,11 +163,11 @@ def gemini_response(body, timeout):
     payload={'contents':[{'role':'user','parts':[{'text':m['content']}]} for m in messages if m['role']!='system'],
              'generationConfig':{'responseMimeType':'application/json','responseJsonSchema':body['text']['format']['schema'],'maxOutputTokens':body['max_output_tokens']}}
     if system:payload['systemInstruction']={'parts':[{'text':system}]}
-    request=Request('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent',data=json.dumps(payload).encode(),headers={'x-goog-api-key':os.environ['BAGLO_GEMINI_API_KEY'],'Content-Type':'application/json'})
+    request=Request('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent',data=json.dumps(payload).encode(),headers={'x-goog-api-key':(os.getenv('BAGLO_GEMINI_API_KEY') or os.environ['GEMINI_API_KEY']),'Content-Type':'application/json'})
     try:
         with urlopen(request,timeout=timeout) as response:data=json.loads(response.read(2000000))
     except HTTPError as error:
-        messages={429:'Gemini 免費額度用盡或請求過快，請稍後再試；未自動重試或切換付費模型。',400:'Gemini 請求遭拒，請檢查金鑰、地區及模型參數。',401:'Gemini 金鑰驗證失敗。',403:'Gemini 金鑰或專案權限不足。',404:'Gemini 模型不可用。'}
+        messages={429:'Gemini API 配額不足或請求過快，請稍後再試；未自動重試或切換付費模型。',400:'Gemini 請求遭拒，請檢查金鑰、地區及模型參數。',401:'Gemini 金鑰驗證失敗。',403:'Gemini 金鑰或專案權限不足。',404:'Gemini 模型不可用。'}
         raise ModelError(messages.get(error.code,'Gemini 服務暫時不可用。')+' 未建立委託。','gemini_http_'+str(error.code)) from None
     except (URLError,TimeoutError):raise ModelError('Gemini 連線逾時，未自動重試、未建立委託。','model_timeout') from None
     except ValueError:raise ModelError('Gemini 回應無法解析。','invalid_provider_json') from None

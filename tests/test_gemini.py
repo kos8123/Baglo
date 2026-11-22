@@ -33,7 +33,7 @@ def test_quota_failure_never_falls_back(monkeypatch):
         calls.append(request.full_url)
         raise HTTPError(request.full_url,429,'quota',{},None)
     monkeypatch.setattr(ai,'urlopen',fetch)
-    with pytest.raises(ai.ModelError,match='額度'):ai.probe()
+    with pytest.raises(ai.ModelError,match='配額'):ai.probe()
     assert len(calls)==1 and 'googleapis.com' in calls[0]
 
 

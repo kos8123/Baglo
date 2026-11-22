@@ -60,7 +60,7 @@ def main():
     if env_file.exists():
         for line in env_file.read_text().splitlines():
             key, separator, value = line.partition('=')
-            if separator and key.strip() in {'BAGLO_AI_PROVIDER', 'BAGLO_GEMINI_API_KEY', 'BAGLO_GEMINI_MODEL', 'BAGLO_FUGLE_API_KEY', 'BAGLO_LOCAL_DB', 'BAGLO_MARKET_CACHE', 'BAGLO_OPENAI_API_KEY', 'BAGLO_OPENAI_MODEL', 'BAGLO_OPENAI_REASONING'}:
+            if separator and key.strip() in {'GEMINI_API_KEY', 'BAGLO_AI_PROVIDER', 'BAGLO_GEMINI_API_KEY', 'BAGLO_GEMINI_MODEL', 'BAGLO_FUGLE_API_KEY', 'BAGLO_LOCAL_DB', 'BAGLO_MARKET_CACHE', 'BAGLO_OPENAI_API_KEY', 'BAGLO_OPENAI_MODEL', 'BAGLO_OPENAI_REASONING'}:
                 os.environ.setdefault(key.strip(), value.strip().strip(chr(34)).strip(chr(39)))
     os.environ['BAGLO_DEMO'] = '1' if args.demo else '0'
     print(f'Baglo http://127.0.0.1:{args.port} — local only; demo fills={args.demo}', flush=True)
