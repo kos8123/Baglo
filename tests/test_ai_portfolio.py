@@ -60,6 +60,7 @@ def test_ai_pool_accepts_verified_stocks_beyond_original_six():
 
 
 def test_enqueue_accepts_registry_verified_otc_stock(tmp_path,monkeypatch):
+    monkeypatch.setenv('BAGLO_AI_PROVIDER','openai')
     monkeypatch.setenv('BAGLO_OPENAI_API_KEY','fixture-only')
     monkeypatch.delenv('BAGLO_AI_WORKER',raising=False)
     seen=[]
@@ -74,6 +75,7 @@ def test_enqueue_accepts_registry_verified_otc_stock(tmp_path,monkeypatch):
 
 def test_model_probe_never_claims_connection_without_real_expected_response(monkeypatch):
     import json
+    monkeypatch.setenv('BAGLO_AI_PROVIDER','openai')
     monkeypatch.setenv('BAGLO_OPENAI_API_KEY','fixture-not-a-real-key')
     monkeypatch.setenv('BAGLO_OPENAI_MODEL','fixture-model')
     class Response:

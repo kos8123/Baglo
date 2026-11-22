@@ -120,24 +120,24 @@ export function AiTrading({
         <span>
           {status.data?.configured
             ? `模型 ${status.data.model} 已設定`
-            : "尚未設定 OpenAI 模型金鑰（富果金鑰只提供行情）"}
+            : "尚未設定 Gemini 模型金鑰（富果金鑰只提供行情）"}
           <br />
           {status.data?.schedule_configured
             ? "AWS 每日排程已設定，仍需帳戶名單與下方授權。"
             : "每日排程尚未設定；本機分析需手動觸發。"}
           <br />
-          分析使用公開技術／基本／籌碼資料，會呼叫 OpenAI 並可能產生費用。AI
+          分析使用公開技術／基本／籌碼資料，會呼叫 Gemini；免費額度依 Google 專案設定，超額即停止，不自動切換模型。AI
           建議不保證獲利，委託不自動成交。
         </span>
       </div>
       <section className="panel ai-connection">
         <div className="panel-heading">
           <h2>模型連線</h2>
-          <span className="badge">OpenAI Responses API</span>
+          <span className="badge">Gemini API</span>
         </div>
         <p className="panel-footnote">
-          先在本機 .env.local 填入 BAGLO_OPENAI_API_KEY，模型設定為
-          BAGLO_OPENAI_MODEL，重啟後再測試。金鑰不放前端，也不要貼到聊天室。測試會發出一個簡短請求，消耗少量
+          先在本機 .env.local 填入 BAGLO_GEMINI_API_KEY，模型設定為
+          BAGLO_GEMINI_MODEL，重啟後再測試。金鑰不放前端，也不要貼到聊天室。測試會發出一個簡短請求，消耗少量
           API 額度，但不分析股票、不建立委託。
         </p>
         <div className="backtest-actions">

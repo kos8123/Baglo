@@ -48,7 +48,7 @@ def handler(event, context):
             'price_ticks': stock_price_ticks(),
             'symbols': [{'symbol': k, 'name': v} for k, v in UNIVERSE.items()],
             'capabilities': {'manual_orders': True, 'live_quote_matching': False,
-                             'ai_recommendations': bool(os.getenv('BAGLO_OPENAI_API_KEY') or os.getenv('BAGLO_OPENAI_SECRET_ARN')), 'ai_auto_trading': os.getenv('BAGLO_AI_SCHEDULE')=='ENABLED', 'ai_paper_workflow': True}})
+                             'ai_recommendations': __import__('baglo.ai',fromlist=['configured']).configured(), 'ai_auto_trading': os.getenv('BAGLO_AI_SCHEDULE')=='ENABLED', 'ai_paper_workflow': True}})
     account = event.get('requestContext', {}).get('authorizer', {}).get('jwt', {}).get('claims', {}).get('sub')
     if not account:
         return response(401, {'error': '請先登入'})
