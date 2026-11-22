@@ -14,6 +14,7 @@ import {
   Bot,
   BriefcaseBusiness,
   BookOpen,
+  History as HistoryIcon,
 } from "lucide-react";
 import { api, dateLabel, initialize, login, logout, money, pct } from "./lib";
 import type {
@@ -30,6 +31,7 @@ import { PriceChart } from "./components/PriceChart";
 import { OrderTicket } from "./components/OrderTicket";
 import { Orders, Positions } from "./components/Orders";
 import { Portfolio } from "./components/Portfolio";
+import { Backtest } from "./components/Backtest";
 import { AiTrading } from "./components/AiTrading";
 import { Research } from "./components/Research";
 export default function App() {
@@ -170,6 +172,7 @@ function Terminal({ config }: { config: Config }) {
     { key: "positions", label: "我的持倉", icon: BriefcaseBusiness },
     { key: "orders", label: "委託紀錄", icon: ClipboardList },
     { key: "ai", label: "AI 模擬交易", icon: Bot },
+    { key: "backtest", label: "策略回測", icon: HistoryIcon },
   ];
   return (
     <div className="app-shell">
@@ -447,6 +450,9 @@ function Terminal({ config }: { config: Config }) {
               />
             </div>
           </div>
+          {view === "backtest" && (
+            <Backtest current={current} enabled={authorized} />
+          )}
           {view === "positions" && (
             <Portfolio
               enabled={authorized}

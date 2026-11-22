@@ -36,6 +36,8 @@ def document():
       '/api/orders/{id}/cancel':{'post':op('取消待成交委託，重播不重複扣款',schema=ref('Order'),params=[param('id',where='path',required=True)])},
       '/api/orders/{id}/demo-fill':{'post':op('僅本機沙盒：依限價示範帳務成交，非市場撮合',schema=ref('Order'),params=[param('id',where='path',required=True)])},
       '/api/analysis':{'get':op('舊版分析相容端點；新版請用 /api/ai')},
+      '/api/backtests':{'post':op('建立非同步固定策略回測，不改動模擬帳本',code='202',body={'type':'object','required':['symbol','strategy','start_date','end_date','initial_cash','fast','slow','lookback','slippage_bps','market_type'],'properties':{'symbol':{'type':'string'},'strategy':{'type':'string','enum':['sma','breakout','buy_hold']},'start_date':{'type':'string','format':'date'},'end_date':{'type':'string','format':'date'},'initial_cash':integer('本金，分',100000),'fast':{'type':'integer'},'slow':{'type':'integer'},'lookback':{'type':'integer'},'slippage_bps':{'type':'integer'},'market_type':{'type':'string','enum':['odd_lot','board_lot']}}})},
+      '/api/backtests/{id}':{'get':op('取得自己帳戶的回測狀態與結果',params=[param('id',where='path',required=True)])},
       '/api/ai':{'get':op('AI 設定、工作狀態與已保存的建議')},
       '/api/ai/settings':{'put':op('儲存帳戶 AI 純模擬設定；啟用需另有模型金鑰',schema=ref('AiSettings'),body=ref('AiSettings'))},
       '/api/ai/jobs':{'post':op('非同步建立三面向 AI 分析，可能產生 OpenAI API 費用',body={'type':'object','required':['symbol'],'properties':{'symbol':{'type':'string'}}},code='202')},

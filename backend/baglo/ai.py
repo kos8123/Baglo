@@ -35,7 +35,7 @@ def save_settings(state, body):
     if type(body['budget']) is not int or not 10000<=body['budget']<=30000000:
         raise DomainError('每筆 AI 模擬預算為 100～300,000 元')
     if type(body['min_confidence']) not in (float,int) or not .5<=body['min_confidence']<=1:
-        raise DomainError('信心門檻需為 0.5～1')
+        raise DomainError('最低信心門檻請設定為 50%～100%')
     if body['enabled'] and not configured():
         raise DomainError('尚未設定 OpenAI 金鑰，無法啟用自動模擬')
     result=deepcopy(state);result['ai_settings']=body;result['auto_enabled']=body['enabled']
@@ -168,6 +168,11 @@ def execute(store,markets,account,job_id,automatic=False):
     return store.mutate(account,op)
 
 def worker(event,context):
+    if event.get('type')=='backtest':
+        from .api import get_markets
+        from .backtest import run
+        run(event['account'],event['job_id'],get_markets())
+        return {'status':'processed'}
     from .api import get_store,get_markets
     run(get_store(),get_markets(),event['account'],event['job_id'],event['symbol'])
     return {'status':'processed'}

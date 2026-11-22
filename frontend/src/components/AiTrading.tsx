@@ -153,18 +153,31 @@ export function AiTrading({
             />
           </label>
           <label className="field">
-            最低信心門檻
+            最低信心門檻（%，AI 至少多有把握才考慮下單）
             <input
               type="number"
-              min="0.5"
-              max="1"
-              step="0.05"
-              value={policy.min_confidence}
+              min="50"
+              max="100"
+              step="5"
+              aria-describedby="confidence-help"
+              value={Math.round(policy.min_confidence * 100)}
               onChange={(e) =>
-                setPolicy({ ...policy, min_confidence: Number(e.target.value) })
+                setPolicy({
+                  ...policy,
+                  min_confidence: Number(e.target.value) / 100,
+                })
               }
             />
           </label>
+          <p id="confidence-help" className="confidence-help">
+            目前設為 <strong>{Math.round(policy.min_confidence * 100)}%</strong>
+            ：AI 自評把握低於這個分數，就跳過這次委託。例如門檻 70%，自評 80%
+            可進一步檢查，自評 60% 就不下單。
+            <br />
+            <strong>這不是獲利機率。</strong>
+            設得高通常會少交易，但不保證比較準或比較賺；達門檻後仍要通過資金、持倉與行情檢查。請到「策略回測」先比較固定規則，AI
+            分數是否可靠則需累積實際建議與結果驗證。
+          </p>
           <div className="ai-pool-search">
             <label>加入自動模擬標的</label>
             <StockSearch

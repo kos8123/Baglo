@@ -67,6 +67,9 @@ def handler(event, context):
             if low is not None and high is not None and low > high:
                 raise DomainError('最低價格不能高於最高價格')
             return response(200, get_markets().search(params.get('q', ''), low, high))
+        if method == 'GET' and path.startswith('/api/backtests/'):
+            from .backtest import read
+            return response(200,read(account,path.rsplit('/',1)[-1]))
         if method == 'GET' and path == '/api/ai':
             from .ai import status
             return response(200,status(get_store().read(account)))
@@ -97,6 +100,9 @@ def handler(event, context):
         body = json.loads(raw)
         if not isinstance(body, dict):
             raise DomainError('請求內容必須為 JSON object')
+        if method == 'POST' and path == '/api/backtests':
+            from .backtest import start
+            return response(202,start(account,body,get_markets()))
         if method == 'PUT' and path == '/api/ai/settings':
             from .ai import save_settings, settings
             # Validate the new universe once, outside optimistic ledger retries.
