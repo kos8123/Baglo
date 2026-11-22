@@ -47,14 +47,14 @@ def simulate(bars,request,start=None,end=None,strategy=None):
                 prior_high=max(b['high'] for b in bars[i-lookback-1:i-1])
                 buy=quantity==0 and signal['close']>prior_high
                 sell=quantity>0 and signal['close']<mean([b['close'] for b in bars[i-lookback:i]])
-        if (buy or sell) and (not bar.get('volume') or bar['high']==bar['low']):
+        if (buy or sell) and ((bar.get('volume') or 0)<=0 or bar['high']==bar['low']):
             skipped+=1;buy=sell=False
         if buy:
             price=slipped(bar['open'],request['slippage_bps'],True,bar['date'])
             unit=1000 if request['market_type']=='board_lot' else 1
             # Liquidity sizing uses only prior-day volume, never the fill-day final volume.
             volume_cap=(signal.get('volume') or 0)//100 if signal else (1000 if unit==1000 else 999)
-            count=min(cash//price,volume_cap,999 if unit==1 else 499000)//unit*unit
+            count=max(0,min(cash//price,volume_cap,999 if unit==1 else 499000))//unit*unit
             while count>0 and count*price+fee(count*price)>cash:count-=unit
             if count:
                 gross=count*price;cost=fee(gross);cash-=gross+cost;quantity=count;entry_cost=gross+cost;fees+=cost;slippage+=count*(price-bar['open'])

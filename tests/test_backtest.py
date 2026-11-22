@@ -64,3 +64,11 @@ def test_complete_report_keeps_holdout_parameters_fixed_and_does_not_touch_ledge
     assert result['result']['development']['end_date']<result['result']['holdout']['start_date']
     assert result['result']['holdout']['metrics']['final_cash']>=0
     assert not (tmp_path/'data/baglo.db').exists()
+
+
+def test_invalid_liquidity_cannot_create_negative_position():
+    bars,body=fixture()
+    for bar in bars:bar['volume']=-1
+    result=simulate(bars,body)
+    assert result['trades']==[] and result['metrics']['final_quantity']==0
+    assert result['metrics']['final_cash']==body['initial_cash']
