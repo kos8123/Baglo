@@ -54,6 +54,9 @@ Resources:
                 Action: [s3:GetObject, s3:GetBucketLocation]
                 Resource: [!GetAtt Artifacts.Arn, !Sub '${Artifacts.Arn}/*']
               - Effect: Allow
+                Action: logs:DescribeLogGroups
+                Resource: '*'
+              - Effect: Allow
                 Action: ['logs:*']
                 Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/baglo-${Environment}-*'
               - Effect: Allow
