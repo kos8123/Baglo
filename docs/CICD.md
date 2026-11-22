@@ -137,3 +137,7 @@ flowchart LR
 ```
 
 測試區使用保留失敗資源模式，方便修復後接續部署；正式區保留自動回滾。失敗時先讀該次 CodeBuild 日誌；重試同一失敗階段即可，不需要從頭建立基礎設施。回退程式請在 Git 建立 revert commit，再經 pipeline；DynamoDB 與研究資料預設 Retain，不刪帳本解決部署問題。
+
+## 登入頁主題
+
+登入採用 Cognito managed login v2，沿用目前 Essentials 方案，透過 `LoginBranding` IaC 統一深色背景、Baglo SVG Logo、萊姆綠按鈕與輸入框。`lang=zh-TW` 預設繁體中文，密碼與重設流程由 Cognito 處理，應用程式不接收或記錄密碼。OAuth PKCE 與 API scope 保持一致；不額外開放公眾註冊。

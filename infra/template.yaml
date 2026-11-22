@@ -139,6 +139,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       UserPoolName: !Sub '${AWS::StackName}-users'
+      UserPoolTier: ESSENTIALS
       AdminCreateUserConfig: {AllowAdminCreateUserOnly: true}
       UsernameAttributes: [email]
       AutoVerifiedAttributes: [email]
@@ -171,8 +172,124 @@ Resources:
   AuthDomain:
     Type: AWS::Cognito::UserPoolDomain
     Properties:
+      ManagedLoginVersion: 2
       UserPoolId: !Ref Users
       Domain: !Sub 'baglo-${Environment}-${AWS::AccountId}-${AWS::Region}'
+  LoginBranding:
+    Type: AWS::Cognito::ManagedLoginBranding
+    DependsOn: AuthDomain
+    Properties:
+      UserPoolId: !Ref Users
+      ClientId: !Ref Client
+      UseCognitoProvidedValues: false
+      Settings:
+        categories:
+          global:
+            colorSchemeMode: DARK
+            spacingDensity: REGULAR
+            pageHeader:
+              enabled: false
+            pageFooter:
+              enabled: false
+          form:
+            displayGraphics: false
+            languageSelector:
+              enabled: true
+            location:
+              horizontal: CENTER
+              vertical: CENTER
+        componentClasses:
+          buttons:
+            borderRadius: 7.0
+          input:
+            borderRadius: 6.0
+            darkMode:
+              defaults:
+                backgroundColor: 141b22ff
+                borderColor: 35414eff
+              placeholderColor: 8295aaff
+          inputLabel:
+            darkMode:
+              textColor: dce5efff
+          inputDescription:
+            darkMode:
+              textColor: 9bafc5ff
+          focusState:
+            darkMode:
+              borderColor: d2f779ff
+          divider:
+            darkMode:
+              borderColor: 303c49ff
+          link:
+            darkMode:
+              defaults:
+                textColor: d2f779ff
+              hover:
+                textColor: e6ffb0ff
+        components:
+          favicon:
+            enabledTypes: [SVG]
+          pageBackground:
+            darkMode:
+              color: 14191fff
+            image:
+              enabled: false
+          form:
+            borderRadius: 10.0
+            backgroundImage:
+              enabled: false
+            darkMode:
+              backgroundColor: 1b222aff
+              borderColor: 303c49ff
+            logo:
+              enabled: true
+              formInclusion: IN
+              location: START
+              position: TOP
+          pageText:
+            darkMode:
+              bodyColor: dce5efff
+              descriptionColor: 9bafc5ff
+              headingColor: dce5efff
+          primaryButton:
+            darkMode:
+              defaults:
+                backgroundColor: d2f779ff
+                textColor: 172017ff
+              hover:
+                backgroundColor: bfe65eff
+                textColor: 172017ff
+              active:
+                backgroundColor: aed44fff
+                textColor: 172017ff
+              disabled:
+                backgroundColor: 35414eff
+                borderColor: 35414eff
+          secondaryButton:
+            darkMode:
+              defaults:
+                backgroundColor: 1b222aff
+                borderColor: 52683eff
+                textColor: d2f779ff
+              hover:
+                backgroundColor: 25302aff
+                borderColor: d2f779ff
+                textColor: d2f779ff
+          alert:
+            borderRadius: 6.0
+            darkMode:
+              error:
+                backgroundColor: 352526ff
+                borderColor: d7857bff
+      Assets:
+      - Category: FORM_LOGO
+        ColorMode: DARK
+        Extension: SVG
+        Bytes: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNDAiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCAyNDAgNjQiPjxyZWN0IHg9IjAiIHk9IjgiIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgcng9IjExIiBmaWxsPSIjZDJmNzc5Ii8+PHRleHQgeD0iMTAiIHk9IjQ1IiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI3MDAiIGZvbnQtc2l6ZT0iMzkiIGZpbGw9IiMxNzIwMTciPmIuPC90ZXh0Pjx0ZXh0IHg9IjY0IiB5PSI0NSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iNzAwIiBmb250LXNpemU9IjQxIiBsZXR0ZXItc3BhY2luZz0iLTIiIGZpbGw9IiNkY2U1ZWYiPkJhZ2xvPC90ZXh0Pjwvc3ZnPgo=
+      - Category: FAVICON_SVG
+        ColorMode: DYNAMIC
+        Extension: SVG
+        Bytes: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iMTAiIGZpbGw9IiNkMmY3NzkiLz48dGV4dCB4PSI5IiB5PSIzNyIgZm9udC1mYW1pbHk9IkFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI3MDAiIGZvbnQtc2l6ZT0iMzgiIGZpbGw9IiMxNzIwMTciPmIuPC90ZXh0Pjwvc3ZnPgo=
   HttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:

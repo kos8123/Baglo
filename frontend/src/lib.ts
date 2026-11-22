@@ -49,7 +49,9 @@ export async function api<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const token = sessionStorage.getItem("baglo_token");
-  const mutating = !["GET", "HEAD", "OPTIONS"].includes((options.method || "GET").toUpperCase());
+  const mutating = !["GET", "HEAD", "OPTIONS"].includes(
+    (options.method || "GET").toUpperCase(),
+  );
   let response: Response;
   try {
     response = await fetch(apiBase + "/api" + path, {
@@ -65,14 +67,22 @@ export async function api<T>(
     });
   } catch (e) {
     if (options.signal?.aborted) throw e;
-    throw new ApiError(mutating ? "無法確認伺服器回應，請查詢委託狀態" : "無法連線至服務，請確認網路或稍後再試", 0, mutating);
+    throw new ApiError(
+      mutating
+        ? "無法確認伺服器回應，請查詢委託狀態"
+        : "無法連線至服務，請確認網路或稍後再試",
+      0,
+      mutating,
+    );
   }
   let data;
   try {
     data = await response.json();
   } catch {
     throw new ApiError(
-      mutating ? "服務回應無法讀取，請查詢委託狀態" : "服務回應無法讀取，請稍後重試",
+      mutating
+        ? "服務回應無法讀取，請查詢委託狀態"
+        : "服務回應無法讀取，請稍後重試",
       response.status,
       mutating,
     );
@@ -130,6 +140,7 @@ export async function login(config: Config) {
   url.search = new URLSearchParams({
     client_id: config.client_id,
     response_type: "code",
+    lang: "zh-TW",
     scope: "openid baglo-api/access",
     redirect_uri: location.origin + "/",
     state,
