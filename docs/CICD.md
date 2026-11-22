@@ -141,3 +141,17 @@ flowchart LR
 ## 登入頁主題
 
 登入採用 Cognito managed login v2，沿用目前 Essentials 方案，透過 `LoginBranding` IaC 統一深色背景、Baglo SVG Logo、萊姆綠按鈕與輸入框。`lang=zh-TW` 預設繁體中文，密碼與重設流程由 Cognito 處理，應用程式不接收或記錄密碼。OAuth PKCE 與 API scope 保持一致；不額外開放公眾註冊。
+
+## Google 第三方登入
+
+Google 登入為可選功能，沒有 OAuth Secret ARN 與版本時不建立提供者、不顯示無法使用的按鈕。Google OAuth client 並不是 Gemini API key。
+
+1. 在 Google Auth Platform 選擇專案，Branding 填 Baglo，Audience 使用 External／Testing，Test users 加入 `kos8123@gmail.com`。僅要求 openid、email、profile，不要求 Gmail 或 Drive 權限。
+2. Clients → Create client → Web application。Authorized redirect URI：`https://baglo-dev-967417234835-us-east-1.auth.us-east-1.amazoncognito.com/oauth2/idpresponse`。這不是 CloudFront 網站網址，JavaScript origins 不需要為此串接新增。
+3. 下載 OAuth JSON，放在 repo 外的 `outputs/google-oauth-client.json`；不要提交到 GitHub 或貼出 Secret。
+4. 已登入 AWS 的環境執行：`python scripts/setup_google_login.py --env dev --client-json ../outputs/google-oauth-client.json --allow-email kos8123@gmail.com`。它會驗證回呼網址與網頁用戶端，安全建立／更新 `baglo/dev/google-oauth`，只輸出 Secret ARN 與版本。這會增加一筆 Secrets Manager 儲存費，無優惠時約 US$0.40／月。
+5. 執行輸出的兩行 export，接著 `bash scripts/setup_codepipeline.sh '已授權 Baglo 的 Connection ARN'`，再執行該環境 pipeline。不要重新建立連線。正式區需要另一個正確 callback 的 OAuth client／secret。
+
+Cognito 新增 Google 使用者與每次發 Token 時，都會檢查 Email allowlist 與 `email_verified`；預設沒有名單就拒絕。原本 Cognito 帳號登入保留。Google 與同 Email 的原生帳號不會自動合併，模擬帳本以各自 Cognito sub 隔離。調整名單或輪替 OAuth 金鑰後，用 helper 更新 Secret 並將新的版本 UUID 交給 pipeline，使 CloudFormation 明確刷新設定；已發出的 access token 仍可能有效至一小時到期。
+
+啟用後由使用者手動測試：允許帳戶可用 Google 登入並返回網站、非允許帳戶被拒絕、登出後受保護 API 回401、原帳號登入仍可用。不得用 GitHub Actions OIDC 的 workload issuer 代替真人第三方登入。

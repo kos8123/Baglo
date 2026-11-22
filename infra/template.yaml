@@ -19,7 +19,10 @@ Parameters:
     Type: String
     Default: ''
     Description: Optional existing Secrets Manager secret ARN; never the API key itself
+  GoogleOAuthSecretArn: {Type: String, Default: '', Description: 'Secret JSON: client_id, client_secret, allowed_emails (comma-separated)'}
+  GoogleOAuthSecretVersion: {Type: String, Default: ''}
 Conditions:
+  HasGoogle: !And [!Not [!Equals [!Ref GoogleOAuthSecretArn, '']], !Not [!Equals [!Ref GoogleOAuthSecretVersion, '']]]
   HasGeminiSecret: !Not [!Equals [!Ref GeminiSecretArn, '']]
   HasOpenAISecret: !Not [!Equals [!Ref OpenAISecretArn, '']]
   HasFugleSecret: !Not [!Equals [!Ref FugleSecretArn, '']]
@@ -141,10 +144,72 @@ Resources:
       UserPoolName: !Sub '${AWS::StackName}-users'
       UserPoolTier: ESSENTIALS
       AdminCreateUserConfig: {AllowAdminCreateUserOnly: true}
+      LambdaConfig: !If
+        - HasGoogle
+        - PreSignUp: !GetAtt GoogleGuard.Arn
+          PreTokenGenerationConfig: {LambdaArn: !GetAtt GoogleGuard.Arn, LambdaVersion: V2_0}
+        - !Ref AWS::NoValue
       UsernameAttributes: [email]
       AutoVerifiedAttributes: [email]
       Policies:
         PasswordPolicy: {MinimumLength: 12, RequireLowercase: true, RequireUppercase: true, RequireNumbers: true, RequireSymbols: true}
+  GoogleProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Condition: HasGoogle
+    Properties:
+      UserPoolId: !Ref Users
+      ProviderName: Google
+      ProviderType: Google
+      ProviderDetails:
+        client_id: !Sub '{{resolve:secretsmanager:${GoogleOAuthSecretArn}:SecretString:client_id::${GoogleOAuthSecretVersion}}}'
+        client_secret: !Sub '{{resolve:secretsmanager:${GoogleOAuthSecretArn}:SecretString:client_secret::${GoogleOAuthSecretVersion}}}'
+        authorize_scopes: openid email profile
+      AttributeMapping: {email: email, email_verified: email_verified}
+  GoogleGuardLog:
+    Type: AWS::Logs::LogGroup
+    Condition: HasGoogle
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-google-guard'
+      RetentionInDays: 7
+  GoogleGuardRole:
+    Type: AWS::IAM::Role
+    Condition: HasGoogle
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}]
+      Policies:
+        - PolicyName: own-auth-logs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !GetAtt GoogleGuardLog.Arn
+  GoogleGuard:
+    Type: AWS::Serverless::Function
+    Condition: HasGoogle
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-google-guard'
+      CodeUri: ../backend/
+      Handler: baglo.google_guard.handler
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 128
+      Timeout: 5
+      Role: !GetAtt GoogleGuardRole.Arn
+      Environment:
+        Variables:
+          BAGLO_GOOGLE_ALLOWED_EMAILS: !Sub '{{resolve:secretsmanager:${GoogleOAuthSecretArn}:SecretString:allowed_emails::${GoogleOAuthSecretVersion}}}'
+  GoogleGuardPermission:
+    Type: AWS::Lambda::Permission
+    Condition: HasGoogle
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref GoogleGuard
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt Users.Arn
+      SourceAccount: !Ref AWS::AccountId
   ApiScopes:
     Type: AWS::Cognito::UserPoolResourceServer
     Properties:
@@ -162,7 +227,7 @@ Resources:
       AllowedOAuthFlowsUserPoolClient: true
       AllowedOAuthFlows: [code]
       AllowedOAuthScopes: [openid, baglo-api/access]
-      SupportedIdentityProviders: [COGNITO]
+      SupportedIdentityProviders: [COGNITO, !If [HasGoogle, !Ref GoogleProvider, !Ref AWS::NoValue]]
       CallbackURLs: [!Sub 'https://${Distribution.DomainName}/']
       LogoutURLs: [!Sub 'https://${Distribution.DomainName}/']
       PreventUserExistenceErrors: ENABLED

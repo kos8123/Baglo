@@ -14,6 +14,8 @@ Parameters:
   OpenAIModel: {Type: String, Default: gpt-4.1-mini}
   AiAccounts: {Type: String, Default: ''}
   AiSchedule: {Type: String, Default: DISABLED, AllowedValues: [ENABLED, DISABLED]}
+  GoogleOAuthSecretArn: {Type: String, Default: '', Description: 'Secret JSON: client_id, client_secret, allowed_emails (comma-separated)'}
+  GoogleOAuthSecretVersion: {Type: String, Default: ''}
 Conditions:
   IsProd: !Equals [!Ref Environment, prod]
 Resources:
@@ -77,6 +79,8 @@ Resources:
           - {Name: BAGLO_ARTIFACT_BUCKET, Value: !Ref ArtifactBucket}
           - {Name: BAGLO_FUGLE_SECRET_ARN, Value: !Ref FugleSecretArn}
           - {Name: BAGLO_GEMINI_SECRET_ARN, Value: !Ref GeminiSecretArn}
+          - {Name: BAGLO_GOOGLE_OAUTH_SECRET_ARN, Value: !Ref GoogleOAuthSecretArn}
+          - {Name: BAGLO_GOOGLE_OAUTH_SECRET_VERSION, Value: !Ref GoogleOAuthSecretVersion}
           - {Name: BAGLO_GEMINI_MODEL, Value: !Ref GeminiModel}
           - {Name: BAGLO_OPENAI_SECRET_ARN, Value: !Ref OpenAISecretArn}
           - {Name: BAGLO_OPENAI_MODEL, Value: !Ref OpenAIModel}

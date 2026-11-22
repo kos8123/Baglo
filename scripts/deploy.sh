@@ -12,7 +12,7 @@ sam build --template-file infra/template.yaml
 PARAMETERS=("Environment=$ENVIRONMENT" "PremarketScheduleState=${BAGLO_AI_SCHEDULE:-DISABLED}" "GeminiModel=${BAGLO_GEMINI_MODEL:-gemini-3.5-flash-lite}" "ReleaseId=$RELEASE" "OpenAIModel=${BAGLO_OPENAI_MODEL:-gpt-4.1-mini}")
 # SAM rejects Key= with an empty value. Omitted optional values use template defaults
 # on first deployment and preserve existing parameters on subsequent deployments.
-for PAIR in "FugleSecretArn=${BAGLO_FUGLE_SECRET_ARN:-}" "GeminiSecretArn=${BAGLO_GEMINI_SECRET_ARN:-}" "OpenAISecretArn=${BAGLO_OPENAI_SECRET_ARN:-}" "AiAccounts=${BAGLO_AI_ACCOUNTS:-}"; do
+for PAIR in "GoogleOAuthSecretArn=${BAGLO_GOOGLE_OAUTH_SECRET_ARN:-}" "GoogleOAuthSecretVersion=${BAGLO_GOOGLE_OAUTH_SECRET_VERSION:-}" "FugleSecretArn=${BAGLO_FUGLE_SECRET_ARN:-}" "GeminiSecretArn=${BAGLO_GEMINI_SECRET_ARN:-}" "OpenAISecretArn=${BAGLO_OPENAI_SECRET_ARN:-}" "AiAccounts=${BAGLO_AI_ACCOUNTS:-}"; do
   [[ -z "${PAIR#*=}" ]] || PARAMETERS+=("$PAIR")
 done
 ROLLBACK_OPTIONS=()
