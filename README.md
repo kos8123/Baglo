@@ -91,7 +91,7 @@ cfn-lint infra/template.yaml infra/bootstrap.yaml infra/codepipeline.yaml
 
 `dev` 對應測試環境；`main` 對應正式環境並保留人工核准。Cloudflare Pages 部署前端，AWS CodePipeline 驗證並部署後端與 IaC。
 
-[CI/CD 說明](docs/CICD.md)
+[架構說明](docs/ARCHITECTURE.md) · [CI/CD 與 Git 工作流](docs/CICD.md) · [問題與解法](docs/CHALLENGES.md)
 
 ## 限制
 

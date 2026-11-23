@@ -1,44 +1,45 @@
-# Baglo 雲端開發與 CI/CD
+# Baglo CI/CD 與 Git 工作流
 
-目前狀態：dev CI/CD 已建立；首次部署修正與驗收進行中。實際上線版本以 CodePipeline 成功執行與 CloudFormation 輸出為準，不能只以本文件推論。
+Baglo 使用 GitHub 作為程式碼來源，AWS CodePipeline、CodeBuild、SAM 與 CloudFormation 負責後端驗證及部署。開發環境與正式環境使用不同的 pipeline 與 CloudFormation stack。
 
-## 架構與分支
+## CI/CD Pipeline
 
-```mermaid
-flowchart LR
-    Dev[GitHub dev] --> Conn[AWS CodeConnections]
-    Main[GitHub main] --> Conn
-    Conn --> Pipe[CodePipeline：每環境獨立、佇列執行]
-    Pipe --> CI[CodeBuild：Python／TypeScript 測試、IaC檢查、前端建置]
-    CI --> Artifact[S3：已驗證產物與雜湊清單]
-    Artifact --> Gate{正式區？}
-    Gate -->|是| Approval[人工核准]
-    Gate -->|測試區| Deploy[CodeBuild／SAM部署]
-    Approval --> Deploy
-    Deploy --> CFN[CloudFormation IaC]
-    CFN --> Web[私有S3＋CloudFront：React]
-    CFN --> API[API Gateway＋Lambda：Python]
-    API --> Auth[Cognito登入]
-    API --> DB[DynamoDB：帳戶／委託／工作狀態]
-    API --> Workers[背景Lambda：三面分析／逐檔回測選股]
-    Workers --> Secrets[Secrets Manager：Gemini／富果]
-    Workers --> Reports[私有S3：行情／策略／回測報告]
-```
+![Baglo CI/CD pipeline](architecture/cicd-pipeline.png)
 
-- `dev`：自動測試、部署 `baglo-dev`，與正式帳本、使用者、網站隔離。
-- `main`：自動測試後等待核准，再部署 `baglo-prod`。第一次建正式 pipeline 前，先把完整程式合併進 main，不能仍是空 repo。
-- CloudFormation 也隨已驗證的 Git 版本更新。第一次建立信任角色與 pipeline 需在 CloudShell 執行一次；之後日常 push 不需重新安裝。
-- AWS 沒有真正免費或無上限的承諾：CodeBuild、CodePipeline、Secrets Manager、儲存、模型皆可能計費。先只建 dev，排程預設停用。
+| Git branch | AWS environment | Deployment behavior |
+| --- | --- | --- |
+| `dev` | `baglo-dev` | 測試成功後自動部署開發環境。 |
+| `main` | `baglo-prod` | 測試成功後等待人工核准，再部署正式環境。 |
 
-## 一支腳本接續建立
+兩個環境各自擁有 CloudFormation stack、DynamoDB、S3、Cognito 與設定，避免測試資料或錯誤部署影響正式環境。
 
-在已登入的 AWS CloudShell、repo dev 分支根目錄執行 `bash scripts/cloudshell_start.sh dev`。它會重用或建立專用 `baglo-github` 連線；若仍 PENDING，提供瀏覽器授權連結後停止，不建立 pipeline。完成 GitHub 授權後重跑同一命令，會重用既有金鑰、建立缺少的金鑰，再接續 bootstrap／pipeline。只針對 Baglo，不修改舊 CloudQuant 資源。
+### AWS 後端流程
 
-## 第一次設定（AWS CloudShell）
+1. GitHub 分支異動由 AWS CodeConnections 傳入 CodePipeline。
+2. CodeBuild 執行 Python、前端、TypeScript、CloudFormation 與 SAM 驗證。
+3. AWS SAM 封裝 Lambda 與 IaC。
+4. CloudFormation 更新對應環境的 serverless stack。
+5. 正式環境在 CloudFormation 部署前保留人工核准。
 
-開啟 **us-east-1** 的 CloudShell，取得 repo 的 dev 分支。私人 repo 請使用你既有的 GitHub 登入或上傳原始碼；不要把 PAT、AWS AK/SK 放進 repo。
+### Edge 流程
 
-在 repo 根目錄執行：
+前端與 Market Sync Worker 依 `dev`／`main` 產生 preview／production 版本。公開設定可以由建置變數注入，但 Gemini、Fugle、Google OAuth Secret 與 AWS 憑證不得進入前端產物。
+
+## GitHub Workflow
+
+![Baglo GitHub development workflow](architecture/github-workflow.png)
+
+1. 從 `dev` 建立短期 `feature/<name>` 分支。
+2. 完成功能後先執行本機測試，再建立 Pull Request 到 `dev`。
+3. CI 通過且差異確認完成後合併，部署開發環境。
+4. 驗證登入、行情、K 線、模擬委託與 AI 流程。
+5. 建立 `dev → main` release PR。
+6. 完整 CI 與基礎設施差異檢查成功後，人工核准正式部署。
+7. 部署後執行 smoke test 並查看 CloudWatch；有問題時重新部署上一個已驗證 commit。
+
+## 第一次建立 Pipeline
+
+在 AWS CloudShell 的 repo 根目錄執行：
 
 ```sh
 export AWS_REGION=us-east-1
@@ -46,112 +47,63 @@ aws sts get-caller-identity --no-cli-pager
 aws codeconnections list-connections --region "$AWS_REGION" --output table --no-cli-pager
 ```
 
-使用同區域、`AVAILABLE`、GitHub App 已授權 `kos8123/Baglo` 的 connection。若還沒有：
+Connection 必須是 `AVAILABLE`，而且 GitHub App 已授權 `kos8123/Baglo`。CLI 可以建立 connection，但 GitHub App 的互動授權仍需在 AWS Console 完成。
 
-```sh
-aws codeconnections create-connection \
-  --region "$AWS_REGION" --provider-type GitHub --connection-name baglo-github \
-  --no-cli-pager
-```
-
-新建 connection 是 `PENDING`，必須到 AWS Developer Tools → Settings → Connections 完成 GitHub App 授權，然後確認成為 `AVAILABLE`。CLI 無法替你完成互動授權。
-
-建立後端金鑰（輸入隱藏，不會顯示金鑰本體；此操作會建立或更新收費的 Secrets Manager secret）：
+建立或更新開發環境：
 
 ```sh
 bash scripts/setup_secrets.sh dev
-```
-
-將輸出的兩行 `export BAGLO_DEV_..._SECRET_ARN=...` 在目前 CloudShell 執行。這些是 ARN，不是金鑰。
-
-```sh
+# 執行腳本輸出的 Secret ARN exports
 export BAGLO_ENVIRONMENTS=dev
-bash scripts/setup_codepipeline.sh '你的 AVAILABLE connection ARN'
+bash scripts/setup_codepipeline.sh 'AVAILABLE_CONNECTION_ARN'
 ```
 
-這會建立 dev bootstrap 與 dev pipeline，首次 pipeline 會抓 GitHub dev 自動建置。GitHub App 仍沒 repo 權限時，只需修正 connection 後重試 Source，不需重建 EC2 或其他歷史 CloudQuant 資源。
-
-## 正式區
-
-先完成 dev 的登入與功能驗收，再合併 dev → main。不要用 force push 覆蓋 main。
+正式環境應在 `dev` 驗證完成並合併至 `main` 後建立：
 
 ```sh
 bash scripts/setup_secrets.sh prod
-# 執行輸出的 BAGLO_PROD_*_SECRET_ARN export
+# 執行腳本輸出的 Secret ARN exports
 export BAGLO_ENVIRONMENTS=prod
-bash scripts/setup_codepipeline.sh '同一個已授權 Baglo 的 connection ARN'
+bash scripts/setup_codepipeline.sh 'AVAILABLE_CONNECTION_ARN'
 ```
 
-正式 pipeline 的 `ApproveProduction` 核准後才部署。prod 不共用 dev 的 DynamoDB、Cognito 或資料 bucket。不同環境可放同一供應商金鑰，但需自行管控共用模型配額。
-
-## 如何確認部署成功
+## 確認部署
 
 ```sh
-aws codepipeline get-pipeline-state --region us-east-1 --name baglo-dev-pipeline \
-  --query 'stageStates[].{Stage:stageName,Status:latestExecution.status}' --output table --no-cli-pager
-aws cloudformation describe-stacks --region us-east-1 --stack-name baglo-dev \
+aws codepipeline get-pipeline-state \
+  --region us-east-1 --name baglo-dev-pipeline \
+  --query 'stageStates[].{Stage:stageName,Status:latestExecution.status}' \
+  --output table --no-cli-pager
+
+aws cloudformation describe-stacks \
+  --region us-east-1 --stack-name baglo-dev \
   --query 'Stacks[0].Outputs' --output table --no-cli-pager
 ```
 
-1. Pipeline Source／Validate／Deploy 全部成功（prod 還需核准）。
-2. CloudFormation `WebsiteUrl` 可開啟；`/release.json` 的 commit 應與該次 Source revision 一致。
-3. `ApiUrl/api/health` 回傳 `ok:true`、`paper_only` 與相同 release；匿名 `/api/account` 必須回 401。
-4. 用管理員建立一個 Cognito 使用者。預設不開放公眾註冊；首次登入處理密碼變更後，測試帳戶、選股研究與模擬委託。
-5. 雲端不提供本機「沙盒成交」按鈕。委託不會自動撮合成交，不可把 pending 委託宣稱為實際績效。
+部署完成必須同時符合：
 
-部署腳本會驗證已測試產物的檔案清單與雜湊，不重新建置前端，只注入公開 API URL。後端與網站皆帶 source commit，避免前後端版本誤判。若網站上傳失敗，整個 Deploy 會失敗，不會假報成功；S3 前端與後端更新並非跨服務原子交易。
+- Pipeline 的 Source、Validate 與 Deploy 全部成功。
+- CloudFormation stack 狀態成功。
+- `/api/health` 回傳正確 release 與 `paper_only` 狀態。
+- 匿名使用者無法讀取帳戶 API。
+- 登入、行情、K 線與模擬委託 smoke test 通過。
 
-## 背景 AI 與排程
+## 失敗處理
 
-- Gemini 金鑰只在後端透過 Secrets Manager 讀取，不進前端或 build 日誌。
-- 多檔選股拆成逐檔 Lambda 工作，最多20檔；帳本中的 claim 防止重複事件重跑模型。每段保存策略與結果後才排下一段。
-- 模型或工作失敗不自動切換模型；背景 Lambda 失敗不自動重新推理。若工作逾時，頁面會顯示失敗，需人工檢查，不能補造訊號。
-- 排程預設 `DISABLED`。需要時在**單一環境**設定 `BAGLO_AI_ACCOUNTS` 為明確的 Cognito sub 清單與 `BAGLO_AI_SCHEDULE=ENABLED`，重跑該環境 pipeline 設定腳本，再執行 pipeline 才會更新應用堆疊。
-- 平日08:30開始研究；09:05後每5分鐘檢查，程式只允許至13:30。必須同時有使用者啟用、當日回測選中股票、同向策略／AI訊號及可信即時報價才建立模擬委託。交易所假日或資料不完整可能跳過／消耗研究額度；目前沒有獨立交易所行事曆服務。
-- 執行器最多選一檔進行當日決策，並非完整多部位再平衡系統。仍需實作自動撮合與完整持倉退出流程，才能宣稱完整自動交易閉環。
+- Source 找不到 branch：確認 Connection 授權的 repository 與 branch 名稱。
+- CodeBuild concurrency：等待進行中的 build 完成，不要同時重複啟動。
+- IAM `AccessDenied`：只補上失敗動作需要的最小權限。
+- CloudFormation rollback：先讀 stack events，修正 template 或參數，不可刪除帳本規避問題。
+- 回退程式：建立 revert commit，再走相同 pipeline；不要 force push `main`。
 
-## 在雲端寫程式（選用）
+## 圖片產生方式
 
-CI/CD 是自動驗證與部署，不等於開發環境。若要連編輯器也搬到雲端，可在 GitHub → Code → Codespaces 建立 dev 分支工作區；`.devcontainer/devcontainer.json` 會安裝 Python、Node24、pnpm 與測試依賴。
-
-設定自己的 `.env.local`（gitignore 已排除）或使用 Codespaces secrets；不要複製本機帳本當作正式帳本。啟動：
+CI/CD 與 GitHub Workflow 圖由版本化 HTML 透過 [Takumi CLI](https://takumi.kane.tw/docs/cli) 產生：
 
 ```sh
-PYTHONPATH=backend python -m baglo.local --demo --env-file .env.local --port 8000
+pnpm dlx @takumi-rs/cli@latest image docs/architecture/cicd-pipeline.html \
+  -o docs/architecture/cicd-pipeline.png --width 2400 --height 1350
+
+pnpm dlx @takumi-rs/cli@latest image docs/architecture/github-workflow.html \
+  -o docs/architecture/github-workflow.png --width 2400 --height 1450
 ```
-
-此伺服器使用固定的本機沙盒身分、沒有雲端登入保護；8000埠必須維持 Codespaces 的 **Private** 可見性，不得公開。Codespaces 的費用／免費額度與 AWS 分開計算。
-
-## 日常工作流程
-
-```mermaid
-flowchart LR
-  Edit[本機或Codespaces修改] --> Push[push dev]
-  Push --> Test[測試＋IaC檢查]
-  Test --> Dev[部署測試區]
-  Dev --> Verify[使用者驗收]
-  Verify --> PR[dev合併main]
-  PR --> Check[重新驗證main版本]
-  Check --> Approve[正式核准]
-  Approve --> Prod[部署正式區]
-```
-
-測試區使用保留失敗資源模式，方便修復後接續部署；正式區保留自動回滾。失敗時先讀該次 CodeBuild 日誌；重試同一失敗階段即可，不需要從頭建立基礎設施。回退程式請在 Git 建立 revert commit，再經 pipeline；DynamoDB 與研究資料預設 Retain，不刪帳本解決部署問題。
-
-## 登入頁主題
-
-登入採用 Cognito managed login v2，沿用目前 Essentials 方案，透過 `LoginBranding` IaC 統一深色背景、Baglo SVG Logo、萊姆綠按鈕與輸入框。`lang=zh-TW` 預設繁體中文，密碼與重設流程由 Cognito 處理，應用程式不接收或記錄密碼。OAuth PKCE 與 API scope 保持一致；不額外開放公眾註冊。
-
-## Google 第三方登入
-
-Google 登入為可選功能，沒有 OAuth Secret ARN 與版本時不建立提供者、不顯示無法使用的按鈕。Google OAuth client 並不是 Gemini API key。
-
-1. 在 Google Auth Platform 選擇專案，Branding 填 Baglo，Audience 使用 External／Testing，Test users 加入 `kos8123@gmail.com`。僅要求 openid、email、profile，不要求 Gmail 或 Drive 權限。
-2. Clients → Create client → Web application。Authorized redirect URI：`https://baglo-dev-967417234835-us-east-1.auth.us-east-1.amazoncognito.com/oauth2/idpresponse`。這不是 CloudFront 網站網址，JavaScript origins 不需要為此串接新增。
-3. 下載 OAuth JSON，放在 repo 外的 `outputs/google-oauth-client.json`；不要提交到 GitHub 或貼出 Secret。
-4. 已登入 AWS 的環境執行：`python scripts/setup_google_login.py --env dev --client-json ../outputs/google-oauth-client.json --allow-email kos8123@gmail.com`。它會驗證回呼網址與網頁用戶端，安全建立／更新 `baglo/dev/google-oauth`，只輸出 Secret ARN 與版本。這會增加一筆 Secrets Manager 儲存費，無優惠時約 US$0.40／月。
-5. 執行輸出的兩行 export，接著 `bash scripts/setup_codepipeline.sh '已授權 Baglo 的 Connection ARN'`，再執行該環境 pipeline。不要重新建立連線。正式區需要另一個正確 callback 的 OAuth client／secret。
-
-Cognito 新增 Google 使用者與每次發 Token 時，都會檢查 Email allowlist 與 `email_verified`；預設沒有名單就拒絕。原本 Cognito 帳號登入保留。Google 與同 Email 的原生帳號不會自動合併，模擬帳本以各自 Cognito sub 隔離。調整名單或輪替 OAuth 金鑰後，用 helper 更新 Secret 並將新的版本 UUID 交給 pipeline，使 CloudFormation 明確刷新設定；已發出的 access token 仍可能有效至一小時到期。
-
-啟用後由使用者手動測試：允許帳戶可用 Google 登入並返回網站、非允許帳戶被拒絕、登出後受保護 API 回401、原帳號登入仍可用。不得用 GitHub Actions OIDC 的 workload issuer 代替真人第三方登入。
