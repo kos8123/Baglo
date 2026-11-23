@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { api, pct, money, dateLabel } from "../lib";
 import { Button } from "./ui/button";
 import { AiTrading } from "./AiTrading";
+import { Database, Flame, History, ListChecks, ShieldCheck, Sparkles } from "lucide-react";
 import type { Config, Instrument } from "../types";
 type Metrics = {
   total_return: number;
@@ -91,17 +92,24 @@ export function AutoTrading(props: {
   const limit = job?.screening?.research_limit || 12;
   const picked = (job?.selected_symbols || [job?.selected_symbol]).filter(Boolean) as string[];
   const name = (symbol: string) => job?.symbol_names?.[symbol] || "";
+  const market = job?.screening?.market_total;
   const steps = [
-    { value: job?.screening?.market_total ? `${job.screening.market_total}` : "全市場", label: "上市櫃普通股" },
-    { value: `${job?.screening?.shortlist_size || 40}`, label: "流動性初篩" },
-    { value: `${limit}`, label: "資料完整、交給 AI" },
-    { value: "≤ 3", label: "回測後選出" },
-    { value: "風控", label: "資金、持倉、行情檢查" },
-    { value: "下單", label: "虛擬資金模擬委託" },
+    { icon: Flame, title: "挑出熱門股", text: `從${market ? ` ${market} 檔` : ""}上市櫃股票中，找出前一天成交最熱絡的 ${job?.screening?.shortlist_size || 40} 檔。` },
+    { icon: Database, title: "檢查資料夠不夠", text: `歷史股價不完整的先跳過，只把前 ${limit} 檔交給 AI。` },
+    { icon: Sparkles, title: "AI 設計買賣規則", text: "AI 替每檔股票想一套進出場規則，例如均線交叉。" },
+    { icon: History, title: "用過去股價測試", text: "拿歷史資料模擬照規則交易，看會賺還是會賠。" },
+    { icon: ListChecks, title: "選出最多 3 檔", text: "成績夠好的才留下；都不夠好就不買，保留現金。" },
+    { icon: ShieldCheck, title: "下單前再確認", text: "檢查資金、持倉和當天價格，通過才用虛擬資金下單。" },
   ];
   const pipeline = (
-    <section className="ai-pipeline" aria-label="AI 選股流程">
-      <ol>{steps.map((step, index) => <li key={step.label}><span className="step-index">{index + 1}</span><strong>{step.value}</strong><span>{step.label}</span></li>)}</ol>
+    <section className="panel ai-pipeline" aria-label="AI 每天怎麼選股">
+      <div className="panel-heading"><h2>AI 每天怎麼選股</h2><span className="health-updated">全程只用虛擬資金</span></div>
+      <ol>{steps.map(({ icon: Icon, title, text }, index) => (
+        <li key={title}>
+          <span className="step-icon"><Icon size={20} /></span>
+          <div><strong><span className="step-no">{index + 1}</span>{title}</strong><p>{text}</p></div>
+        </li>
+      ))}</ol>
     </section>
   );
   const research = (

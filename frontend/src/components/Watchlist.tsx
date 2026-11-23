@@ -6,12 +6,13 @@ import type { Instrument } from "../types";
 import { StockSearch } from "./StockSearch";
 import { Button } from "./ui/button";
 
-type Health = { key: string; status: string; created_at: string; error?: string; result?: {
+type Health = { key: string; status: string; created_at: string; error?: string;
+  facts?: { holdings: { symbol: string; weight_pct: number }[]; held_count: number }; result?: {
   summary: string; assessment: string; risks: string[]; suggestions: string[]; limitations: string[];
 } };
 type Metric = { label: string; value: string; ratio: number; tone: "good" | "warn" | "neutral"; note: string };
 const firstSentence = (text: string) => { const match = text.match(/^[^。！？!?]+[。！？!?]?/); return (match ? match[0] : text).slice(0, 80); };
-function healthMetrics(items: Instrument[], positions: Record<string, number>): Metric[] {
+function healthMetrics(items: Instrument[], positions: Record<string, number>, facts?: Health["facts"]): Metric[] {
   const total = items.length;
   const priced = items.filter(i => i.price != null).length;
   const latest = items.reduce((max, i) => (i.as_of && i.as_of > max ? i.as_of : max), "");
@@ -20,8 +21,11 @@ function healthMetrics(items: Instrument[], positions: Record<string, number>): 
   const held = Object.entries(positions).filter(([, q]) => q > 0);
   const values = held.map(([symbol, q]) => ({ symbol, value: (prices.get(symbol) ?? 0) * q })).filter(v => v.value > 0);
   const sum = values.reduce((a, v) => a + v.value, 0);
-  const top = values.sort((a, b) => b.value - a.value)[0];
-  const share = top && sum ? top.value / sum : 0;
+  // Prefer the server's figure: it prices every holding, including ones not on the watchlist.
+  const server = facts?.holdings?.[0];
+  const top = server ? { symbol: server.symbol, value: 1 } : values.sort((a, b) => b.value - a.value)[0];
+  const share = server ? server.weight_pct / 100 : top && sum ? top.value / sum : 0;
+  const counted = server ? facts!.holdings.length : values.length;
   const tone = (ok: boolean): Metric["tone"] => (ok ? "good" : "warn");
   return [
     { label: "報價完整", value: total ? `${priced}/${total}` : "—", ratio: total ? priced / total : 0, tone: total ? tone(priced === total) : "neutral",
@@ -31,7 +35,7 @@ function healthMetrics(items: Instrument[], positions: Record<string, number>): 
     held.length === 0 ? { label: "持倉集中", value: "—", ratio: 0, tone: "neutral", note: "目前沒有模擬持倉" }
       : !top ? { label: "持倉集中", value: "—", ratio: 0, tone: "neutral", note: "持倉缺少報價，無法計算" }
       : { label: "持倉集中", value: `${Math.round(share * 100)}%`, ratio: share, tone: share > 0.6 ? "warn" : "good",
-          note: (held.length === 1 ? `只持有 ${top.symbol} 一檔` : `最大持倉 ${top.symbol}`) + (values.length < held.length ? `，${held.length - values.length} 檔缺報價未計入` : "") },
+          note: (held.length === 1 ? `只持有 ${top.symbol} 一檔` : `最大持倉 ${top.symbol}`) + (counted < held.length ? `，${held.length - counted} 檔缺報價未計入` : "") },
   ];
 }
 const today = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
@@ -61,7 +65,7 @@ export function Watchlist({ items, current, positions, saving, onSave, onOpen }:
     sort === "code" ? a.symbol.localeCompare(b.symbol) : sort === "price" ? (b.price ?? -1) - (a.price ?? -1) : 0);
   const result = health.data?.result;
   const busy = ["queued", "running"].includes(health.data?.status || "");
-  const metrics = healthMetrics(items, positions);
+  const metrics = healthMetrics(items, positions, health.data?.status === "completed" && health.data.key ? health.data.facts : undefined);
   const verdict = result ? ({ balanced: { title: "整體尚可", tone: "good" }, needs_attention: { title: "需要留意", tone: "warn" }, insufficient_data: { title: "資料不足", tone: "neutral" } }[result.assessment] || { title: "已完成", tone: "neutral" })
     : health.error || health.data?.error ? { title: "暫時無法分析", tone: "neutral" } : { title: "分析中", tone: "neutral" };
   return <div className="automation-page watchlist-page">

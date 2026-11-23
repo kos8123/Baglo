@@ -160,30 +160,30 @@ export function StockSearch({
           <X size={14} />
         </Button>
       </div>
-      <div className="price-filters">
-        <label>
-          最低股價
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={low}
-            placeholder="不限"
-            onChange={(e) => filter("low", e.target.value)}
-          />
-        </label>
-        <span>—</span>
-        <label>
-          最高股價
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={high}
-            placeholder="不限"
-            onChange={(e) => filter("high", e.target.value)}
-          />
-        </label>
+      <div className="price-range" role="group" aria-label="股價範圍">
+        <span className="price-range-label">股價</span>
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          inputMode="decimal"
+          value={low}
+          placeholder="最低"
+          aria-label="最低股價"
+          onChange={(e) => filter("low", e.target.value)}
+        />
+        <span className="price-range-sep" aria-hidden="true">–</span>
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          inputMode="decimal"
+          value={high}
+          placeholder="最高"
+          aria-label="最高股價"
+          onChange={(e) => filter("high", e.target.value)}
+        />
+        <span className="price-range-unit">元</span>
       </div>
       {open && (
         <div className="search-popover">

@@ -196,12 +196,24 @@ function Terminal({ config }: { config: Config }) {
         method: "PUT",
         body: JSON.stringify({ symbols: items.map((item) => item.symbol) }),
       }),
-    onSuccess: () => {
+    // Optimistic: show the new list at once and keep it while the server confirms,
+    // so the star button and list never fall back to the old state mid-save.
+    onMutate: async (items: Instrument[]) => {
+      await queryClient.cancelQueries({ queryKey: ["watchlist"] });
+      const previous = queryClient.getQueryData<{ items: Instrument[]; symbols: string[] }>(["watchlist"]);
+      queryClient.setQueryData(["watchlist"], { items, symbols: items.map((item) => item.symbol) });
+      return { previous };
+    },
+    onSuccess: () => setPicked([]),
+    onError: (error: Error, _items, context) => {
+      if (context?.previous) queryClient.setQueryData(["watchlist"], context.previous);
       setPicked([]);
+      notify(error.message, true);
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["watchlist"] });
       void queryClient.invalidateQueries({ queryKey: ["account"] });
     },
-    onError: (error: Error) => notify(error.message, true),
   });
   const instruments = useMemo(() => {
     const map = new Map<string, Instrument>();
@@ -225,7 +237,7 @@ function Terminal({ config }: { config: Config }) {
   const current = refreshed && (!listed.as_of || (refreshed.as_of || "") >= listed.as_of)
     ? { ...listed, ...refreshed }
     : listed;
-  const watchItems = saveWatchlist.isPending ? picked : savedInstruments;
+  const watchItems = savedInstruments;
   const select = (item: Instrument) => {
     setSelected(item);
     setDirty(false);
@@ -240,6 +252,7 @@ function Terminal({ config }: { config: Config }) {
   };
   const toggleCurrentWatch = () => {
     if (!authorized) return void beginLogin();
+    if (saveWatchlist.isPending) return;
     const exists = savedInstruments.some((item) => item.symbol === current.symbol);
     const next = exists
       ? savedInstruments.filter((item) => item.symbol !== current.symbol)
@@ -462,7 +475,7 @@ function Terminal({ config }: { config: Config }) {
               <Button
                 variant={watchItems.some((item) => item.symbol === current.symbol) ? "default" : "outline"}
                 size="sm"
-                disabled={saveWatchlist.isPending}
+                aria-busy={saveWatchlist.isPending}
                 onClick={toggleCurrentWatch}
               >
                 <Star size={14} />

@@ -44,3 +44,16 @@ def test_worker_saves_summary_and_ignores_duplicate_event(tmp_path, monkeypatch)
     assert len(calls) == 1
     assert store.read('alice')['watchlist_health']['result'] == result
     assert store.read('alice')['watchlist_health']['status'] == 'completed'
+
+
+def test_facts_compute_weights_and_flag_unwatched_holdings():
+    snapshot = {'day': '2026-11-24', 'symbols': ['2330', '2317'], 'positions': {'2330': 20, '2317': 10, '2313': 9}}
+    registry = {'2330': {'name': '台積電', 'price': 200000, 'change': -1000, 'as_of': '2026-11-20', 'turnover': 30_000_000_000},
+                '2317': {'name': '鴻海', 'price': 21000, 'as_of': '2026-11-19', 'turnover': 90_000_000}}
+    result = health.facts(snapshot, registry)
+    assert result['holdings'][0] == {'symbol': '2330', 'name': '台積電', 'value': 40000, 'weight_pct': 95.0}
+    assert result['held_not_watched'] == ['2313']
+    assert result['missing_price'] == ['2313']
+    items = {item['symbol']: item for item in result['items']}
+    assert items['2317']['stale_days'] == 1 and items['2330']['stale_days'] == 0
+    assert items['2330']['change_pct'] == -0.5 and items['2317']['turnover_million'] == 90.0
