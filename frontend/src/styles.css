@@ -2296,6 +2296,22 @@ footer {
 @media (max-width: 800px) { .automation-guide { grid-template-columns: 1fr; } }
 .watchlist-review { padding: 20px; margin: 16px; border: 1px solid #35414b; border-radius: 8px; }
 .watchlist-review p { line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.watchlist-page { max-width: 1500px; margin-inline: auto; }
+.watchlist-add-form { display: flex; gap: 16px; align-items: flex-start; padding: 22px; }
+.watchlist-add-form .instrument-search { flex: 1; min-width: 0; width: auto; }
+.watchlist-add-form > .btn { flex-shrink: 0; }
+.watchlist-add { overflow: visible; }
+.watchlist-filters { display: grid; grid-template-columns: minmax(160px, 320px) minmax(140px, 210px); gap: 20px; padding: 20px 22px; align-items: end; }
+.watchlist-filters .field { margin: 0; }
+.watchlist-filters select { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: inherit; font: inherit; }
+.watchlist-health-body { padding: 22px; }
+.watchlist-health-body > .panel-footnote { padding: 0; }
+.health-summary { line-height: 1.9; font-size: 16px; white-space: pre-wrap; }
+.health-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.health-columns li { line-height: 1.8; margin-bottom: 10px; overflow-wrap: anywhere; }
+.watchlist-page .automation-table-scroll { overflow-x: auto; }
+.watchlist-page table { width: 100%; min-width: 680px; }
+@media(max-width: 800px) { .health-columns { grid-template-columns: 1fr; } .watchlist-add-form { flex-direction: column; } .watchlist-add-form > * { width: 100%; } .watchlist-filters { grid-template-columns: 1fr; } }
 .terminal-grid { grid-template-columns: minmax(300px, 1fr) 300px; }
 .terminal-grid .trading-watchlist { grid-column: 1 / -1; grid-row: 1; align-self: start; width: 100%; order: -1; }
 .trading-watchlist summary { cursor: pointer; list-style: none; }

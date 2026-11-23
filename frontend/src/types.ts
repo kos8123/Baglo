@@ -8,6 +8,9 @@ export interface Instrument {
   price?: number | null;
   as_of?: string;
   stale_cache?: boolean;
+  source?: string;
+  fetched_at?: string;
+  data_age_days?: number;
   price_limits?: Limits;
 }
 export interface Limits {

@@ -287,6 +287,11 @@ def execute(store,markets,account,job_id,automatic=False):
     return store.mutate(account,op)
 
 def worker(event,context):
+    if event.get('type') == 'watchlist_health':
+        from .api import get_store, get_markets
+        from .watchlist_health import run
+        run(get_store(), get_markets(), event['account'], event['key'])
+        return {'status': 'processed'}
     if event.get('type')=='backtest':
         from .api import get_markets
         from .backtest import run

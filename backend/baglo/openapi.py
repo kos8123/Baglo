@@ -34,6 +34,7 @@ def document():
       '/api/history/{symbol}':{'get':op('官方未還原日線，分頁查詢',schema=ref('History'),public=True,params=symbol+[param('months','integer',minimum=1,maximum=6,default=4),param('offset','integer',minimum=0,maximum=114,default=0)])},
       '/api/research/{symbol}':{'get':op('營收、估值與法人資料',params=symbol)},
       '/api/watchlist':{'get':op('取得帳戶自選股與最近收盤參考'),'put':op('儲存帳戶自選股，最多30檔')},
+      '/api/watchlist/health':{'get':op('取得已保存的 AI 自選股健康摘要'),'post':op('依當日清單及持倉建立或沿用 AI 健康摘要')},
       '/api/orders':{'post':op('建立純模擬限價委託；重試須沿用同一編號',schema=ref('Order'),params=[param('Idempotency-Key',where='header',required=True,minLength=8,maxLength=100)],body=ref('OrderInput'))},
       '/api/orders/{id}/cancel':{'post':op('取消待成交委託，重播不重複扣款',schema=ref('Order'),params=[param('id',where='path',required=True)])},
       '/api/orders/{id}/demo-fill':{'post':op('僅本機沙盒：依限價示範帳務成交，非市場撮合',schema=ref('Order'),params=[param('id',where='path',required=True)])},

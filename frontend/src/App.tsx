@@ -42,6 +42,7 @@ import { Portfolio } from "./components/Portfolio";
 import { AutoTrading } from "./components/AutoTrading";
 import { Research } from "./components/Research";
 import { Watchlist } from "./components/Watchlist";
+import { readLanguage, tr, type Language } from "./language";
 export default function App() {
   const init = useQuery({
     queryKey: ["bootstrap"],
@@ -65,6 +66,13 @@ export default function App() {
   );
 }
 function Terminal({ config }: { config: Config }) {
+  const [language, setLanguage] = useState<Language>(readLanguage);
+  const changeLanguage = () => {
+    const next = language === "en" ? "zh-TW" : "en";
+    localStorage.setItem("baglo_language", next);
+    document.documentElement.lang = next;
+    setLanguage(next);
+  };
   const queryClient = useQueryClient();
   const fetching = useIsFetching();
   const mutating = useIsMutating();
@@ -91,7 +99,7 @@ function Terminal({ config }: { config: Config }) {
     [bottom, setBottom] = useState("positions"),
     [dirty, setDirty] = useState(false),
     [picked, setPicked] = useState<Instrument[]>([]),
-    [showFunds, setShowFunds] = useState(() => localStorage.getItem("baglo_show_funds") !== "0"),
+    [showFunds, setShowFunds] = useState(() => localStorage.getItem("baglo_show_funds") === "1"),
     [toast, setToast] = useState<{ message: string; error: boolean } | null>(
       null,
     ),
@@ -258,6 +266,12 @@ function Terminal({ config }: { config: Config }) {
       for (const bar of page.bars) map.set(bar.date, bar);
     return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
   }, [history.data]);
+  // A newer completed daily bar may be available before the quote catalog refreshes.
+  const taipei = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const lastCompletedBar = bars.filter(bar => bar.date < taipei).at(-1);
+  const closeReference = lastCompletedBar && (!current.as_of || lastCompletedBar.date > current.as_of)
+    ? { price: lastCompletedBar.close, date: lastCompletedBar.date, source: history.data?.pages[0].source || "日 K 資料" }
+    : { price: current.price, date: current.as_of, source: current.source || current.exchange || "行情來源" };
   const research = useQuery({
     queryKey: ["research", current.symbol],
     queryFn: ({ signal }) =>
@@ -294,15 +308,15 @@ function Terminal({ config }: { config: Config }) {
           {nav.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
-              title={label}
-              aria-label={label}
+              title={tr(label, language)}
+              aria-label={tr(label, language)}
               aria-current={view === key ? "page" : undefined}
               className={`${view === key ? "active" : ""}${!authorized && key !== "trade" ? " locked" : ""}`}
               aria-disabled={!authorized && key !== "trade"}
               onClick={() => chooseView(key)}
             >
               <Icon size={21} />
-              <span>{label}</span>
+              <span>{tr(label, language)}</span>
               {!authorized && key !== "trade" && (
                 <LockKeyhole className="nav-lock" size={12} />
               )}
@@ -314,8 +328,9 @@ function Terminal({ config }: { config: Config }) {
       <div className="application">
         <header className="topbar">
           <div className="wordmark">
-            Baglo<span className="product-name">交易終端</span>
+            Baglo<span className="product-name">{tr("交易終端", language)}</span>
           </div>
+          <Button variant="ghost" size="sm" onClick={changeLanguage} aria-label="Switch language">{language === "en" ? "繁中" : "EN"}</Button>
           <div className="connection">
             <i />
             {config.demo
@@ -349,16 +364,11 @@ function Terminal({ config }: { config: Config }) {
             <div>
               <span>
                 <Wallet size={13} /> 現金餘額
-              </span>
-              <strong>{money(ledger?.cash)}</strong>
-            </div>
-            <div>
-              <span>
-                可用資金
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label={showFunds ? "隱藏可用資金" : "顯示可用資金"}
+                  aria-label={showFunds ? "隱藏帳務摘要" : "顯示帳務摘要"}
+                  aria-pressed={showFunds}
                   onClick={() => {
                     const next = !showFunds;
                     setShowFunds(next);
@@ -368,22 +378,26 @@ function Terminal({ config }: { config: Config }) {
                   {showFunds ? <Eye size={13} /> : <EyeOff size={13} />}
                 </Button>
               </span>
-              <strong>{showFunds ? (ledger ? money(ledger.cash - reserved) : "—") : "••••••"}</strong>
+              <strong>{showFunds ? money(ledger?.cash) : "****"}</strong>
+            </div>
+            <div>
+              <span>可用資金</span>
+              <strong>{showFunds ? (ledger ? money(ledger.cash - reserved) : "—") : "****"}</strong>
             </div>
             <div>
               <span>委託保留</span>
-              <strong>{ledger ? money(reserved) : "—"}</strong>
+              <strong>{showFunds ? (ledger ? money(reserved) : "—") : "****"}</strong>
             </div>
             <div>
               <span>持有標的</span>
               <strong>
-                {ledger ? holdingCount : "—"} <small>檔</small>
+                {showFunds ? (ledger ? holdingCount : "—") : "****"} {showFunds && <small>檔</small>}
               </strong>
             </div>
             <div>
               <span>待成交委託</span>
               <strong>
-                {ledger ? pending.length : "—"} <small>筆</small>
+                {showFunds ? (ledger ? pending.length : "—") : "****"} {showFunds && <small>筆</small>}
               </strong>
             </div>
           </div>
@@ -431,8 +445,10 @@ function Terminal({ config }: { config: Config }) {
                   {current.symbol} <span>{current.name}</span>
                 </h1>
                 <div className="daily-close">
-                  <strong>{money(current.price)}</strong>
-                  <small>{selectedReference.isPending && !current.as_of ? "讀取收盤資料…" : `收盤資料日 ${current.as_of || "尚未取得"}`}</small>
+                  <strong>{money(closeReference.price)}</strong>
+                  <small>{selectedReference.isPending && !closeReference.date ? "讀取收盤資料…" : `收盤資料日 ${closeReference.date || "尚未取得"}`}</small>
+                  {closeReference.date && <small>{closeReference.source} · {closeReference.date < taipei ? "歷史收盤參考，非即時行情" : "依來源提供日期"}</small>}
+                  <Button variant="ghost" size="sm" disabled={selectedReference.isFetching} onClick={() => void selectedReference.refetch()}>{selectedReference.isFetching ? "更新中…" : "更新參考價"}</Button>
                   {current.stale_cache && <small role="status">來源暫未更新，顯示舊快取</small>}
                   {selectedReference.error && <small role="status">更新失敗，保留原資料日期</small>}
                 </div>
@@ -579,7 +595,7 @@ function Terminal({ config }: { config: Config }) {
               />
             </div>
           </div>
-          {view === "watchlist" && authorized && <Watchlist items={watchItems} current={current} saving={saveWatchlist.isPending} onSave={items => { setPicked(items); saveWatchlist.mutate(items); }} onOpen={item => { select(item); setView("trade"); }} notify={notify} />}
+          {view === "watchlist" && authorized && <Watchlist items={watchItems} current={current} positions={ledger?.positions || {}} saving={saveWatchlist.isPending} onSave={items => { setPicked(items); saveWatchlist.mutate(items); }} onOpen={item => { select(item); setView("trade"); }} notify={notify} />}
           {(view === "backtest" || view === "automation") && (
             <AutoTrading
               enabled={authorized}

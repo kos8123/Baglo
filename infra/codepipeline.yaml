@@ -56,7 +56,13 @@ Resources:
       ServiceRole: !GetAtt ValidateRole.Arn
       Source: {Type: CODEPIPELINE, BuildSpec: buildspec.yml}
       Artifacts: {Type: CODEPIPELINE}
-      Environment: {Type: LINUX_CONTAINER, ComputeType: BUILD_GENERAL1_SMALL, Image: 'aws/codebuild/standard:7.0', PrivilegedMode: false}
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: 'aws/codebuild/standard:7.0'
+        PrivilegedMode: false
+        EnvironmentVariables:
+          - {Name: BAGLO_FRONTEND_URL, Value: !Ref FrontendUrl}
       TimeoutInMinutes: 20
       ConcurrentBuildLimit: 1
       LogsConfig:
@@ -120,6 +126,16 @@ Resources:
       ExecutionMode: QUEUED
       RoleArn: !GetAtt PipelineRole.Arn
       ArtifactStore: {Type: S3, Location: !Ref ArtifactBucket}
+      Triggers:
+        - ProviderType: CodeStarSourceConnection
+          GitConfiguration:
+            SourceActionName: GitHub
+            Push:
+              - Branches:
+                  Includes: [!If [IsProd, main, dev]]
+                FilePaths:
+                  Includes: ['backend/**', 'infra/**', 'scripts/**', 'requirements*.txt', 'pyproject.toml', 'buildspec*.yml', 'tests/**']
+                  Excludes: ['scripts/cloudflare_build.sh', 'scripts/build_frontend.py', 'scripts/configure_frontend.py', 'tests/*.test.ts']
       Stages:
         - Name: Source
           Actions:
@@ -129,7 +145,7 @@ Resources:
                 ConnectionArn: !Ref ConnectionArn
                 FullRepositoryId: !Ref Repository
                 BranchName: !If [IsProd, main, dev]
-                DetectChanges: 'true'
+                DetectChanges: 'false'
                 OutputArtifactFormat: CODE_ZIP
               OutputArtifacts: [{Name: Source}]
         - Name: Validate

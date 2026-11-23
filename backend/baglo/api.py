@@ -106,6 +106,11 @@ def handler(event, context):
             items=[registry[symbol] for symbol in symbols if symbol in registry]
             return response(200,{'items':items,'symbols':[item['symbol'] for item in items]})
         raw = event.get('body') or '{}'
+        if method == 'POST' and path == '/api/watchlist/health':
+            from .watchlist_health import start
+            return response(202, start(get_store(), get_markets(), account))
+        if method == 'GET' and path == '/api/watchlist/health':
+            return response(200, {'report': get_store().read(account).get('watchlist_health')})
         if event.get('isBase64Encoded'):
             raw = base64.b64decode(raw).decode()
         if len(raw) > 4096:

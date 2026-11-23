@@ -1,5 +1,7 @@
 # Baglo CI/CD與Git工作流
 
+部署依變更路徑觸發，前端、Worker 與 AWS 後端分開。文件更新不觸發部署，設定與套用方式請見 [部署路徑](DEPLOY_PATHS.md)。
+
 Baglo使用GitHub作為程式碼來源，AWS CodePipeline、CodeBuild、SAM與CloudFormation負責後端驗證及部署。開發環境與正式環境使用不同的pipeline與CloudFormation stack。
 
 ## CI/CD Pipeline

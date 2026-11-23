@@ -171,7 +171,8 @@ def normalize_prices(rows, source, fetched_at, stale=False):
             'price': price, 'change': int(round(change*100)) if change is not None else None,
             'volume': int(volume) if volume is not None and volume >= 0 else None,
             'turnover': int(turnover) if turnover is not None and turnover >= 0 else None,
-            'as_of': day, 'source': source, 'fetched_at': fetched_at, 'stale_cache': stale})
+            'as_of': day, 'source': source, 'fetched_at': fetched_at, 'stale_cache': stale,
+            'data_age_days': max(0, (datetime.now(TZ).date()-date.fromisoformat(day)).days)})
     if not instruments:
         raise DataUnavailable('來源沒有可支援的普通股資料')
     return instruments

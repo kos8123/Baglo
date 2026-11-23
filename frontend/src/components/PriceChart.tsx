@@ -15,8 +15,16 @@ import { money } from "../lib";
 import { aggregate } from "../chart-data";
 import type { Bar, Period } from "../types";
 import { Button } from "./ui/button";
+import { tr } from "../language";
 const names = { day: "日 K", week: "週 K", month: "月 K" };
 const defaultCounts: Record<Period, number> = { day: 1260, week: 416, month: 120 };
+const chartDate = (value: Time | undefined): string => {
+  if (value == null) return "—";
+  if (typeof value === "string") return value.replaceAll("-", "/");
+  if (typeof value === "number") return new Date(value * 1000).toISOString().slice(0, 10).replaceAll("-", "/");
+  return `${value.year}/${String(value.month).padStart(2, "0")}/${String(value.day).padStart(2, "0")}`;
+};
+const lots = (value: number) => new Intl.NumberFormat("zh-TW", { maximumFractionDigits: 3 }).format(value);
 export function PriceChart({
   symbol,
   bars,
@@ -75,8 +83,9 @@ export function PriceChart({
         timeVisible: false,
         fixLeftEdge: true,
         fixRightEdge: true,
+        tickMarkFormatter: (time: Time) => chartDate(time),
       },
-      localization: { locale: "zh-TW" },
+      localization: { locale: "zh-TW", timeFormatter: chartDate },
       handleScroll: {
         mouseWheel: true,
         pressedMouseMove: true,
@@ -100,7 +109,7 @@ export function PriceChart({
     const volumes = instance.addSeries(
       HistogramSeries,
       {
-        priceFormat: { type: "volume" },
+        priceFormat: { type: "custom", minMove: 0.001, formatter: (value: number) => `${lots(value)} 張` },
         priceLineVisible: false,
         lastValueVisible: false,
       },
@@ -156,7 +165,7 @@ export function PriceChart({
         .filter((b) => b.volume != null)
         .map((b) => ({
           time: b.date as Time,
-          value: b.volume!,
+          value: b.volume! / 1000,
           color: b.close >= b.open ? "#ef777b55" : "#58c4a155",
         })),
     );
@@ -208,7 +217,7 @@ export function PriceChart({
               className={period === p ? "selected" : ""}
               onClick={() => setPeriod(p)}
             >
-              {names[p]}
+              {tr(names[p])}
             </Button>
           ))}
         </div>
@@ -253,15 +262,15 @@ export function PriceChart({
             <Expand size={14} />
           </Button>
         </div>
-        <span className="source-note">未還原價格 · 紅漲綠跌</span>
+        <span className="source-note">{tr("未還原價格 · 紅漲綠跌")}</span>
       </div>
       <div className="ohlc" aria-live="off">
         {readout ? (
           <>
             <span>
               {period === "day"
-                ? readout.date
-                : `${readout.period_start} ～ ${readout.period_end}`}
+                ? chartDate(readout.date)
+                : `${chartDate(readout.period_start)} ～ ${chartDate(readout.period_end)}`}
             </span>
             {[
               ["開", readout.open],
@@ -270,13 +279,13 @@ export function PriceChart({
               ["收", readout.close],
             ].map(([label, value]) => (
               <span key={label}>
-                <small>{label}</small> {money(value as number)}
+                <small>{tr(label as string)}</small> {money(value as number)}
               </span>
             ))}
             <span>
-              <small>量</small>{" "}
-              {readout.volume == null ? "—" : readout.volume.toLocaleString()}{" "}
-              股
+              <small>{tr("量")}</small>{" "}
+              {readout.volume == null ? "—" : lots(readout.volume / 1000)}{" "}
+              {tr("張")}
             </span>
           </>
         ) : (

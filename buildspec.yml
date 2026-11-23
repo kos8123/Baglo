@@ -5,15 +5,14 @@ phases:
       python: '3.12'
       nodejs: '24'
     commands:
-      - npm install -g pnpm@11.25.0
-      - pnpm --dir frontend install --frozen-lockfile
+      - if [ -z "$BAGLO_FRONTEND_URL" ]; then npm install -g pnpm@11.25.0 && pnpm --dir frontend install --frozen-lockfile; fi
       - python -m pip install -r requirements-dev.txt
   build:
     commands:
       - python -m pytest -q
       - node --experimental-strip-types --test tests/*.test.ts
       - cfn-lint infra/template.yaml infra/bootstrap.yaml infra/codepipeline.yaml
-      - python scripts/build_frontend.py
+      - if [ -z "$BAGLO_FRONTEND_URL" ]; then python scripts/build_frontend.py; else mkdir -p dist; fi
       - bash -n scripts/deploy.sh scripts/setup_codepipeline.sh scripts/setup_secrets.sh scripts/cloudshell_start.sh
       - python scripts/release_manifest.py create
 artifacts:
