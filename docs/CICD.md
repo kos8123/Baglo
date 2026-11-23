@@ -103,9 +103,9 @@ aws cloudformation describe-stacks \
 CI/CD與GitHub Workflow圖由版本化HTML透過[Takumi CLI](https://takumi.kane.tw/docs/cli)產生：
 
 ```sh
-pnpm dlx @takumi-rs/cli@latest image docs/architecture/cicd-pipeline.html \
+pnpm dlx @takumi-rs/cli@0.3.1 image docs/architecture/cicd-pipeline.html \
   -o docs/architecture/cicd-pipeline.png --width 2400 --height 1350
 
-pnpm dlx @takumi-rs/cli@latest image docs/architecture/github-workflow.html \
-  -o docs/architecture/github-workflow.png --width 2400 --height 1450
+pnpm dlx @takumi-rs/cli@0.3.1 image docs/architecture/github-workflow.html \
+  -o docs/architecture/github-workflow.png --width 2400 --height 1650
 ```

@@ -1,21 +1,21 @@
 <style>
   * { box-sizing: border-box; }
-  body { margin: 0; width: 2400px; height: 1450px; padding: 56px 64px; background: #f7f9fb; color: #17202a; font-family: Arial, sans-serif; }
+  body { margin: 0; width: 2400px; height: 1650px; padding: 56px 64px; background: #f7f9fb; color: #17202a; font-family: Arial, sans-serif; }
   h1 { margin: 0; font-size: 48px; } .sub { margin-top: 8px; color: #5d6874; font-size: 22px; }
   .legend { display: flex; gap: 26px; margin-top: 24px; font-size: 18px; }
   .dot { width: 18px; height: 18px; border-radius: 50%; display: inline-block; margin-right: 8px; vertical-align: -2px; }
   .workflow { margin-top: 34px; background: white; border: 3px solid #232f3e; padding: 34px; }
-  .row { display: flex; align-items: center; min-height: 210px; border-bottom: 2px dashed #b4bbc2; gap: 22px; }
+  .row { display: flex; align-items: center; min-height: 250px; border-bottom: 2px dashed #b4bbc2; gap: 22px; }
   .row:last-child { border-bottom: 0; }
   .label { width: 210px; font-size: 25px; font-weight: 700; }
-  .step { width: 250px; min-height: 132px; border: 2px solid #8f99a3; background: #fff; padding: 18px; text-align: center; }
+  .step { width: 390px; height: 214px; border: 2px solid #8f99a3; background: #fff; padding: 18px; text-align: center; }
   .step.blue { border-top: 12px solid #147eba; } .step.red { border-top: 12px solid #dd3c2f; } .step.green { border-top: 12px solid #4d8c2d; } .step.gray { border-top: 12px solid #59636e; }
-  .step .title { font-size: 21px; font-weight: 700; } .step .desc { margin-top: 9px; color: #5f6b76; font-size: 16px; line-height: 1.35; }
-  .arrow { width: 55px; height: 4px; background: #3d4852; position: relative; flex: none; }
+  .step img { width: 56px; height: 56px; display: block; margin: 0 auto 10px; } .step .title { font-size: 21px; font-weight: 700; } .step .desc { margin-top: 9px; color: #5f6b76; font-size: 16px; line-height: 1.35; }
+  .arrow { width: 70px; height: 4px; background: #3d4852; position: relative; flex: none; }
   .arrow:after { content: ""; position: absolute; right: -1px; top: -7px; border-left: 14px solid #3d4852; border-top: 9px solid transparent; border-bottom: 9px solid transparent; }
   .rules { display: flex; gap: 24px; margin-top: 28px; }
   .panel { flex: 1; background: white; border: 2px solid #9aa4ae; padding: 22px 26px; }
-  .panel h2 { margin: 0 0 12px; font-size: 24px; } .panel ul { margin: 0; padding-left: 25px; font-size: 18px; line-height: 1.55; color: #48535e; }
+  .panel h2 { margin: 0 0 12px; font-size: 24px; display: flex; align-items: center; gap: 12px; } .panel h2 img { width: 36px; height: 36px; } .panel ul { margin: 0; padding-left: 25px; font-size: 18px; line-height: 1.55; color: #48535e; }
 </style>
 <h1>Baglo — GitHub Development Workflow</h1>
 <div class="sub">Feature development, review, automated validation, development deployment, and controlled production release</div>
@@ -24,36 +24,36 @@
 <div class="workflow">
   <div class="row">
     <div class="label">Feature work</div>
-    <div class="step gray"><div class="title">Create feature branch</div><div class="desc">feature/&lt;short-name&gt;<br>Start from dev</div></div><div class="arrow"></div>
-    <div class="step gray"><div class="title">Commit locally</div><div class="desc">Small focused commits<br>No secrets in Git</div></div><div class="arrow"></div>
-    <div class="step green"><div class="title">Run local checks</div><div class="desc">Backend tests<br>Frontend tests and build</div></div><div class="arrow"></div>
-    <div class="step blue"><div class="title">Pull request to dev</div><div class="desc">Explain scope, risk, and evidence</div></div>
+    <div class="step gray"><img src="icons/branch.svg"><div class="title">Create feature branch</div><div class="desc">feature/&lt;short-name&gt;<br>Start from dev</div></div><div class="arrow"></div>
+    <div class="step gray"><img src="icons/commit.svg"><div class="title">Commit locally</div><div class="desc">Small focused commits<br>No secrets in Git</div></div><div class="arrow"></div>
+    <div class="step green"><img src="icons/test.svg"><div class="title">Run local checks</div><div class="desc">Backend tests<br>Frontend tests and build</div></div><div class="arrow"></div>
+    <div class="step blue"><img src="icons/pull-request.svg"><div class="title">Pull request to dev</div><div class="desc">Explain scope, risk, and evidence</div></div>
   </div>
   <div class="row">
     <div class="label">Development</div>
-    <div class="step blue"><div class="title">Automated CI</div><div class="desc">Tests · lint · SAM validation</div></div><div class="arrow"></div>
-    <div class="step blue"><div class="title">Review changes</div><div class="desc">Inspect diff and architecture impact</div></div><div class="arrow"></div>
-    <div class="step blue"><div class="title">Merge into dev</div><div class="desc">Keep branch history traceable</div></div><div class="arrow"></div>
-    <div class="step green"><div class="title">Deploy dev</div><div class="desc">Development AWS stack<br>Preview frontend and worker</div></div>
+    <div class="step blue"><img src="icons/githubactions.svg"><div class="title">Automated CI</div><div class="desc">Tests · lint · SAM validation</div></div><div class="arrow"></div>
+    <div class="step blue"><img src="icons/review.svg"><div class="title">Review changes</div><div class="desc">Inspect diff and architecture impact</div></div><div class="arrow"></div>
+    <div class="step blue"><img src="icons/merge.svg"><div class="title">Merge into dev</div><div class="desc">Keep branch history traceable</div></div><div class="arrow"></div>
+    <div class="step green"><img src="icons/deploy-dev.svg"><div class="title">Deploy dev</div><div class="desc">Development AWS stack<br>Preview frontend and worker</div></div>
   </div>
   <div class="row">
     <div class="label">Release</div>
-    <div class="step red"><div class="title">Pull request dev → main</div><div class="desc">Release summary and verification</div></div><div class="arrow"></div>
-    <div class="step green"><div class="title">Production checks</div><div class="desc">Full CI and infrastructure diff</div></div><div class="arrow"></div>
-    <div class="step red"><div class="title">Manual approval</div><div class="desc">Confirm cost, security, and rollback</div></div><div class="arrow"></div>
-    <div class="step red"><div class="title">Deploy production</div><div class="desc">Production AWS stack<br>Production frontend and worker</div></div>
+    <div class="step red"><img src="icons/release-pr.svg"><div class="title">Pull request dev → main</div><div class="desc">Release summary and verification</div></div><div class="arrow"></div>
+    <div class="step green"><img src="icons/checks.svg"><div class="title">Production checks</div><div class="desc">Full CI and infrastructure diff</div></div><div class="arrow"></div>
+    <div class="step red"><img src="icons/approval.svg"><div class="title">Manual approval</div><div class="desc">Confirm cost, security, and rollback</div></div><div class="arrow"></div>
+    <div class="step red"><img src="icons/deploy-prod.svg"><div class="title">Deploy production</div><div class="desc">Production AWS stack<br>Production frontend and worker</div></div>
   </div>
   <div class="row">
     <div class="label">After release</div>
-    <div class="step green"><div class="title">Smoke test</div><div class="desc">Login · market data · paper order</div></div><div class="arrow"></div>
-    <div class="step gray"><div class="title">Observe</div><div class="desc">CloudWatch logs and API health</div></div><div class="arrow"></div>
-    <div class="step gray"><div class="title">Document</div><div class="desc">Update README and known limits</div></div><div class="arrow"></div>
-    <div class="step gray"><div class="title">Rollback if needed</div><div class="desc">Redeploy the previous verified commit</div></div>
+    <div class="step green"><img src="icons/smoke-test.svg"><div class="title">Smoke test</div><div class="desc">Login · market data · paper order</div></div><div class="arrow"></div>
+    <div class="step gray"><img src="aws-icons/Arch_Amazon-CloudWatch_64.svg"><div class="title">Observe</div><div class="desc">CloudWatch logs and API health</div></div><div class="arrow"></div>
+    <div class="step gray"><img src="icons/document.svg"><div class="title">Document</div><div class="desc">Update README and known limits</div></div><div class="arrow"></div>
+    <div class="step gray"><img src="icons/rollback.svg"><div class="title">Rollback if needed</div><div class="desc">Redeploy the previous verified commit</div></div>
   </div>
 </div>
 
 <div class="rules">
-  <div class="panel"><h2>Branch policy</h2><ul><li>dev is the integration branch</li><li>main represents production</li><li>Feature branches are short-lived</li><li>Direct production changes are avoided</li></ul></div>
-  <div class="panel"><h2>Pull request evidence</h2><ul><li>Purpose and affected components</li><li>Test results and screenshots</li><li>Infrastructure and cost impact</li><li>Known limitations and rollback plan</li></ul></div>
-  <div class="panel"><h2>Secret handling</h2><ul><li>Never commit API keys</li><li>Use AWS Secrets Manager</li><li>Use deployment variables for public config</li><li>Rotate exposed credentials immediately</li></ul></div>
+  <div class="panel"><h2><img src="icons/policy.svg">Branch policy</h2><ul><li>dev is the integration branch</li><li>main represents production</li><li>Feature branches are short-lived</li><li>Direct production changes are avoided</li></ul></div>
+  <div class="panel"><h2><img src="icons/evidence.svg">Pull request evidence</h2><ul><li>Purpose and affected components</li><li>Test results and screenshots</li><li>Infrastructure and cost impact</li><li>Known limitations and rollback plan</li></ul></div>
+  <div class="panel"><h2><img src="icons/secret.svg">Secret handling</h2><ul><li>Never commit API keys</li><li>Use AWS Secrets Manager</li><li>Use deployment variables for public config</li><li>Rotate exposed credentials immediately</li></ul></div>
 </div>
