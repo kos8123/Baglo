@@ -129,7 +129,9 @@ export function AiTrading({
           專案設定，不自動切換模型。AI 建議不保證獲利，委託不自動成交。
         </span>
       </div>
-      <section className="panel ai-connection">
+      <details className="panel ai-connection-details">
+        <summary>進階：模型連線與診斷</summary>
+      <section className="ai-connection">
         <div className="panel-heading">
           <h2>模型連線</h2>
           <span className="badge">Gemini API</span>
@@ -158,6 +160,7 @@ export function AiTrading({
           </p>
         )}
       </section>
+      </details>
       {status.error && (
         <div className="inline-error">{status.error.message}</div>
       )}

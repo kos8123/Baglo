@@ -93,10 +93,15 @@ export function AutoTrading(props: {
       <header className="automation-header">
         <div>
           <h1>AI 自動交易</h1>
-          <p>全市場邏輯初篩、AI 產生策略與回測選股，再自動執行模擬委託。</p>
+          <p>先找出值得研究的股票，再用歷史資料驗證，最後依你的設定建立模擬委託。</p>
         </div>
         <span className="badge">PAPER TRADING</span>
       </header>
+      <ol className="automation-guide" aria-label="AI 模擬交易操作流程">
+        <li><strong>1. 設定交易條件</strong><span>填寫每筆預算與最低信心分數，儲存設定。</span></li>
+        <li><strong>2. 開始選股研究</strong><span>AI 產生策略並回測；你可以離開頁面，稍後回來查看。</span></li>
+        <li><strong>3. 查看候選與委託</strong><span>通過條件才會成為候選；啟用且排程就緒後才自動建立委託。</span></li>
+      </ol>
       <AiTrading {...props} />
       <section className="panel automation-research">
         <div className="panel-heading">
@@ -116,7 +121,7 @@ export function AutoTrading(props: {
             disabled={!props.enabled || run.isPending || busy}
             onClick={() => run.mutate()}
           >
-            {busy ? "AI 生成策略與回測中…" : "讓 AI 選策略並回測選股"}
+            {run.isPending ? "正在送出研究…" : busy ? "研究進行中，請稍候…" : "開始 AI 選股與回測"}
           </Button>
           <Button variant="outline" onClick={() => void report.refetch()}>
             更新研究狀態
@@ -124,6 +129,8 @@ export function AutoTrading(props: {
         </div>
         {run.error && <p className="inline-error">{run.error.message}</p>}
         {report.error && <p className="inline-error">{report.error.message}</p>}
+        {!job && !report.isPending && !report.error && <p className="empty">還沒有選股報告。點選「開始 AI 選股與回測」，完成後會在這裡顯示候選股票、策略理由與回測表現。</p>}
+        {busy && <div className="notice" role="status" aria-live="polite">已完成 {job.results.length} 檔研究，最多研究 {job.screening?.research_limit || 12} 檔。系統會自動更新進度，不需要重複點擊。</div>}
         {job && (
           <>
             <p className="panel-footnote">

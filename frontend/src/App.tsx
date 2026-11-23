@@ -41,6 +41,7 @@ import { Orders, Positions } from "./components/Orders";
 import { Portfolio } from "./components/Portfolio";
 import { AutoTrading } from "./components/AutoTrading";
 import { Research } from "./components/Research";
+import { Watchlist } from "./components/Watchlist";
 export default function App() {
   const init = useQuery({
     queryKey: ["bootstrap"],
@@ -77,6 +78,7 @@ function Terminal({ config }: { config: Config }) {
       return [
         "trade",
         "positions",
+        "watchlist",
         "orders",
         "research",
         "ai",
@@ -106,6 +108,7 @@ function Terminal({ config }: { config: Config }) {
         [
           "trade",
           "positions",
+          "watchlist",
           "orders",
           "research",
           "ai",
@@ -132,7 +135,8 @@ function Terminal({ config }: { config: Config }) {
   const beginLogin = async () => {
     setSigningIn(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 650));
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      await new Promise((resolve) => setTimeout(resolve, reducedMotion ? 150 : 2400));
       await login(config);
     } catch (error) {
       setSigningIn(false);
@@ -165,9 +169,19 @@ function Terminal({ config }: { config: Config }) {
     queryFn: ({ signal }) => api<{ items: Instrument[]; symbols: string[] }>("/watchlist", { signal }),
     enabled: authorized,
   });
+  const publicPrices = useQuery({
+    queryKey: ["public-reference-prices"],
+    queryFn: ({ signal }) => api<{ items: Instrument[] }>("/instruments", { signal }),
+    enabled: !authorized,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+  });
   const savedInstruments = authorized
     ? watchlist.data?.items || config.symbols
-    : config.symbols;
+    : config.symbols.map((item) => ({
+        ...item,
+        ...publicPrices.data?.items.find((quote) => quote.symbol === item.symbol),
+      }));
   const saveWatchlist = useMutation({
     mutationFn: (items: Instrument[]) =>
       api<{ symbols: string[] }>("/watchlist", {
@@ -191,8 +205,18 @@ function Terminal({ config }: { config: Config }) {
       map.set(i.symbol, { ...map.get(i.symbol), ...i });
     return [...map.values()];
   }, [savedInstruments, picked, selected]);
-  const current =
+  const selectedReference = useQuery({
+    queryKey: ["reference-price", selected.symbol],
+    queryFn: ({ signal }) => api<{ items: Instrument[] }>("/instruments?q=" + encodeURIComponent(selected.symbol), { signal }),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+  const listed =
     instruments.find((i) => i.symbol === selected.symbol) || selected;
+  const refreshed = selectedReference.data?.items.find(item => item.symbol === selected.symbol);
+  const current = refreshed && (!listed.as_of || (refreshed.as_of || "") >= listed.as_of)
+    ? { ...listed, ...refreshed }
+    : listed;
   const watchItems = saveWatchlist.isPending ? picked : savedInstruments;
   const select = (item: Instrument) => {
     setSelected(item);
@@ -254,6 +278,7 @@ function Terminal({ config }: { config: Config }) {
     : "";
   const nav = [
     { key: "trade", label: "交易工作台", icon: ChartCandlestick },
+    { key: "watchlist", label: "我的自選股", icon: Star },
     { key: "research", label: "個股研究", icon: FlaskConical },
     { key: "positions", label: "我的持倉", icon: BriefcaseBusiness },
     { key: "orders", label: "委託紀錄", icon: ClipboardList },
@@ -407,7 +432,9 @@ function Terminal({ config }: { config: Config }) {
                 </h1>
                 <div className="daily-close">
                   <strong>{money(current.price)}</strong>
-                  <small>最近收盤 {current.as_of || "—"}</small>
+                  <small>{selectedReference.isPending && !current.as_of ? "讀取收盤資料…" : `收盤資料日 ${current.as_of || "尚未取得"}`}</small>
+                  {current.stale_cache && <small role="status">來源暫未更新，顯示舊快取</small>}
+                  {selectedReference.error && <small role="status">更新失敗，保留原資料日期</small>}
                 </div>
               </div>
               <StockSearch
@@ -429,19 +456,21 @@ function Terminal({ config }: { config: Config }) {
           )}
           <div hidden={view !== "trade"}>
             <div className="terminal-grid">
-              <section className="panel watchlist-panel">
-                <div className="panel-heading">
-                  <h2>標的清單</h2>
-                  <span className="caption">收盤參考</span>
-                </div>
+              <details className="panel watchlist-panel trading-watchlist" open>
+                <summary className="panel-heading">
+                  <span><Star size={14} /> {authorized ? "我的自選股" : "訪客觀察清單"} · {watchItems.length} 檔</span>
+                  <span className="caption">點此展開／收合</span>
+                </summary>
                 <div className="watchlist">
+                  {!authorized && publicPrices.isPending && <p className="empty" role="status"><LoaderCircle className="spin" size={16} /> 正在讀取收盤參考價…</p>}
+                  {!authorized && publicPrices.error && <div className="notice" role="alert"><span>收盤參考價暫時無法載入</span><Button size="sm" variant="outline" onClick={() => void publicPrices.refetch()}>重試</Button></div>}
                   {watchItems.map((i) => (
                       <button
                         key={i.symbol}
                         className={
                           i.symbol === current.symbol ? "selected" : ""
                         }
-                        onClick={() => select(i)}
+                        onClick={() => { select(i); setView("trade"); }}
                       >
                         <span>
                           <strong>{i.name}</strong>
@@ -453,13 +482,10 @@ function Terminal({ config }: { config: Config }) {
                   {!watchItems.length && <p className="empty">尚無自選股，請先搜尋股票後加入。</p>}
                 </div>
                 <div className="watchlist-note">
-                  上市櫃普通股
-                  <br />
-                  不含 ETF、TDR、權證
-                  <br />
-                  報價時間依各來源列示
+                  <span>{authorized ? "與「我的自選股」同步，點選股票切換 K 線與下單標的。" : "登入後可保存自己的自選股。"} 價格為收盤參考。</span>
+                  {authorized && <Button variant="ghost" size="sm" onClick={() => chooseView("watchlist")}>管理自選股</Button>}
                 </div>
-              </section>
+              </details>
               <div className="center-column">
                 <section className="panel chart-card">
                   <div className="panel-heading">
@@ -553,6 +579,7 @@ function Terminal({ config }: { config: Config }) {
               />
             </div>
           </div>
+          {view === "watchlist" && authorized && <Watchlist items={watchItems} current={current} saving={saveWatchlist.isPending} onSave={items => { setPicked(items); saveWatchlist.mutate(items); }} onOpen={item => { select(item); setView("trade"); }} notify={notify} />}
           {(view === "backtest" || view === "automation") && (
             <AutoTrading
               enabled={authorized}
@@ -628,9 +655,17 @@ function Terminal({ config }: { config: Config }) {
         )}
         {signingIn && (
           <div className="login-transition" role="status" aria-live="polite">
-            <div className="login-transition-mark">
-              <LoaderCircle className="spin" size={32} />
-            </div>
+            <svg className="baglo-login-animation" viewBox="0 0 340 130" aria-hidden="true">
+              <text className="baglo-letter-b" x="10" y="98">b</text>
+              <text className="baglo-letter baglo-letter-a" x="78" y="98">a</text>
+              <text className="baglo-letter baglo-letter-g" x="140" y="98">g</text>
+              <g className="baglo-letter baglo-letter-l baglo-candle-letter">
+                <line x1="221" y1="21" x2="221" y2="108" />
+                <rect x="214" y="37" width="14" height="61" rx="2" />
+              </g>
+              <circle className="baglo-travel-dot" cx="78" cy="90" r="7" />
+              <circle className="baglo-drawn-o" cx="282" cy="72" r="26" pathLength="1" />
+            </svg>
             <strong>正在開啟安全登入</strong>
             <span>登入後才會啟用個人交易與 AI 功能</span>
           </div>
