@@ -189,6 +189,15 @@ def test_market_routes_are_public_but_research_requires_auth(service,monkeypatch
     base['rawPath']='/api/research/6488'
     assert api.handler(base,None)['statusCode']==401
 
+def test_catalog_exports_all_supported_instruments(service,monkeypatch):
+    monkeypatch.setattr(api,'_markets',service)
+    event={'requestContext':{'http':{'method':'GET'}},'rawPath':'/api/instruments/export'}
+    result=api.handler(event,None)
+    body=json.loads(result['body'])
+    assert result['statusCode']==200
+    symbols={item['symbol'] for item in body['items']}
+    assert body['total']==len(body['items']) and {'2330','6488'} <= symbols
+
 
 def test_otc_history_lots_convert_to_shares(service,monkeypatch):
     old=service.fetcher

@@ -54,6 +54,8 @@ def handler(event, context):
     try:
         # Read-only market data is intentionally public. Account, research, AI and
         # order routes remain behind the API Gateway authorizer and this guard.
+        if method == 'GET' and path == '/api/instruments/export':
+            return response(200, get_markets().catalog())
         if method == 'GET' and path == '/api/instruments':
             params = event.get('queryStringParameters') or {}
             def price_filter(key):

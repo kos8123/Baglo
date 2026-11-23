@@ -4,6 +4,22 @@ const jsonHeaders = {
   "X-Content-Type-Options": "nosniff",
 };
 
+function fromFullHistory(data, months, offset) {
+  const now = new Date();
+  const taipei = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Taipei" }));
+  const latest = taipei.getFullYear() * 12 + taipei.getMonth() - offset;
+  const earliest = latest - months + 1;
+  const bars = (data.bars || []).filter((bar) => {
+    const [year, month] = String(bar.date).split("-").map(Number);
+    const index = year * 12 + month - 1;
+    return index >= earliest && index <= latest;
+  });
+  const sma = (count) => bars.length >= count
+    ? Math.round(bars.slice(-count).reduce((sum, bar) => sum + bar.close, 0) / count)
+    : null;
+  return { ...data, bars, sma20: sma(20), sma60: sma(60), as_of: bars.at(-1)?.date || null };
+}
+
 export async function onRequestGet({ env, params, request }) {
   const symbol = String(params.symbol || "");
   const input = new URL(request.url);
@@ -24,6 +40,13 @@ export async function onRequestGet({ env, params, request }) {
     const saved = Number(cached?.customMetadata?.savedAt || 0);
     if (cached && Date.now() - saved < 6 * 3600_000)
       return new Response(cached.body, { headers: { ...jsonHeaders, "X-Baglo-Cache": "HIT" } });
+    const full = await bucket.get(`history/v1/${symbol}/full.json`);
+    const fullSaved = Number(full?.customMetadata?.savedAt || 0);
+    if (full && Date.now() - fullSaved < 48 * 3600_000) {
+      const data = fromFullHistory(await full.json(), months, offset);
+      if (data.bars.length)
+        return new Response(JSON.stringify(data), { headers: { ...jsonHeaders, "X-Baglo-Cache": "PREFILL" } });
+    }
   }
 
   try {

@@ -16,7 +16,7 @@ Baglo 是台股 AI 研究與模擬交易平台，用於展示 Serverless 雲端�
 ## 架構
 
 - **Frontend:** React、TypeScript、Vite、TanStack Query、Lightweight Charts
-- **Hosting:** Cloudflare Pages
+- **Hosting:** Cloudflare Pages、R2 K 線快取與 Worker 每日預填
 - **Backend:** Python 3.12、AWS Lambda、API Gateway
 - **Identity:** Cognito + Google OAuth
 - **Storage:** DynamoDB、S3

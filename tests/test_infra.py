@@ -21,7 +21,7 @@ def test_deployment_requires_identity_and_has_no_demo_or_public_bucket():
     assert resources['Api']['Properties']['Environment']['Variables']['BAGLO_DEMO'] == '0'
     assert resources['Users']['Properties']['AdminCreateUserConfig']['AllowAdminCreateUserOnly'] is False
     events = resources['Api']['Properties']['Events']
-    for name in ['PublicInstruments', 'PublicMarket', 'PublicHistory']:
+    for name in ['PublicInstruments', 'PublicInstrumentExport', 'PublicMarket', 'PublicHistory']:
         assert events[name]['Properties']['Auth']['Authorizer'] == 'NONE'
     for name in ['WebsiteBucket', 'ResearchBucket']:
         assert all(resources[name]['Properties']['PublicAccessBlockConfiguration'].values())
@@ -52,3 +52,7 @@ def test_cloudflare_pages_build_has_public_home_legal_and_terminal_routes():
     assert '--market-base /market' in build
     function=(ROOT/'functions/market/history/[symbol].js').read_text()
     assert 'BAGLO_MARKET_CACHE' in function and 'BAGLO_API_BASE' in function
+    worker=(ROOT/'workers/market-sync.js').read_text()
+    assert 'BATCH_SIZE = 10' in worker and 'completedDay' in worker
+    wrangler=(ROOT/'wrangler.market-sync.toml').read_text()
+    assert 'bucket_name = "baglo-market-cache"' in wrangler

@@ -38,6 +38,16 @@ SKIP_DEPENDENCY_INSTALL=1
 
 Pages Function 會先讀取 R2；未命中時才回源 AWS 公開 K 線 API，成功後保存 6 小時。沒有設定 binding 時會直接回源，不會影響現有網站。R2 不存帳戶、token 或 AI 資料。
 
+### 每日預先填充
+
+`baglo-market-sync` Worker 每 5 分鐘處理 10 檔股票，將最近 6 個月寫入同一個 R2 bucket；全市場完成後當日停止。第一次在已登入 Cloudflare 的終端部署：
+
+```bash
+npx wrangler deploy -c wrangler.market-sync.toml
+```
+
+可開啟 Worker 網址查看 `cursor` 與 `total`。Pages Function 回應標頭為 `X-Baglo-Cache: PREFILL` 時，代表 K 線直接來自排程預填的 R2 資料。
+
 ## 將 Pages 網址加入 AWS
 
 第一次部署完成並取得固定網址（例如 `https://baglo.pages.dev`）後，從可信任的 CloudShell 執行：

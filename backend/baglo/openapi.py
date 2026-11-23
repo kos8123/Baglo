@@ -29,6 +29,7 @@ def document():
       '/api/account':{'get':op('取得自己的資金、持倉與委託',schema=ref('Account'))},
       '/api/portfolio':{'get':op('移動平均成本與參考市值；各筆標示價格時間')},
       '/api/instruments':{'get':op('上市櫃普通股代號、名稱與收盤價格搜尋',public=True,params=[param('q'),param('min_price','number',minimum=0),param('max_price','number',minimum=0)])},
+      '/api/instruments/export':{'get':op('排程快取使用的公開上市櫃普通股清單',public=True)},
       '/api/market/{symbol}':{'get':op('整股／零股參考行情與漲跌停資料',public=True,params=symbol+[param('market_type',enum=['board_lot','odd_lot'])])},
       '/api/history/{symbol}':{'get':op('官方未還原日線，分頁查詢',schema=ref('History'),public=True,params=symbol+[param('months','integer',minimum=1,maximum=6,default=4),param('offset','integer',minimum=0,maximum=114,default=0)])},
       '/api/research/{symbol}':{'get':op('營收、估值與法人資料',params=symbol)},

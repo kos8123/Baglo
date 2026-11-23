@@ -510,6 +510,14 @@ Resources:
             Method: GET
             PayloadFormatVersion: '2.0'
             Auth: {Authorizer: NONE}
+        PublicInstrumentExport:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/instruments/export
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth: {Authorizer: NONE}
         PublicMarket:
           Type: HttpApi
           Properties:

@@ -267,6 +267,11 @@ class MarketService:
         return {'items': rows[:20], 'total': len(rows), 'sources': self.status,
                 'price_kind': 'close', 'scope': '上市櫃普通股（不含 ETF、TDR、權證）'}
 
+    def catalog(self):
+        rows = sorted(self.index().values(), key=lambda row: row['symbol'])
+        return {'items': rows, 'total': len(rows), 'sources': self.status,
+                'price_kind': 'close', 'scope': '上市櫃普通股（不含 ETF、TDR、權證）'}
+
     def fugle_key(self):
         key = os.getenv('BAGLO_FUGLE_API_KEY', '')
         if key:
@@ -365,7 +370,9 @@ class MarketService:
                 return payload
             month_bars, month_warnings = {}, []
             try:
-                cached = self.cache.get('history:'+('TPEx:' if instrument['exchange'] == 'TPEx' else '')+symbol+':'+stamp, load, ttl=6*3600)
+                current_stamp = f'{current.year:04}{current.month:02}01'
+                ttl = 6*3600 if stamp == current_stamp else 30*86400
+                cached = self.cache.get('history:'+('TPEx:' if instrument['exchange'] == 'TPEx' else '')+symbol+':'+stamp, load, ttl=ttl)
                 data = cached['data']
                 fields = data['fields']
                 indexes = {name: fields.index(name) for name in ['日期', '開盤價', '最高價', '最低價', '收盤價', '成交股數']}
