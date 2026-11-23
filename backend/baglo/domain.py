@@ -20,7 +20,8 @@ def now():
 
 def new_account(mode):
     return {'version': 0, 'mode': mode, 'initial_cash': INITIAL_CASH,
-            'cash': INITIAL_CASH, 'positions': {}, 'orders': [], 'auto_enabled': False}
+            'cash': INITIAL_CASH, 'positions': {}, 'orders': [], 'auto_enabled': False,
+            'watchlist': list(UNIVERSE)}
 
 def fingerprint(body):
     return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(',', ':')).encode()).hexdigest()

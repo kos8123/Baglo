@@ -3,7 +3,9 @@ import {
   useInfiniteQuery,
   useIsFetching,
   useIsMutating,
+  useMutation,
   useQuery,
+  useQueryClient,
 } from "@tanstack/react-query";
 import {
   Activity,
@@ -19,6 +21,9 @@ import {
   ArrowRight,
   RefreshCw,
   BriefcaseBusiness,
+  Eye,
+  EyeOff,
+  Star,
 } from "lucide-react";
 import { api, dateLabel, initialize, login, logout, marketApi, money, pct } from "./lib";
 import type {
@@ -59,6 +64,7 @@ export default function App() {
   );
 }
 function Terminal({ config }: { config: Config }) {
+  const queryClient = useQueryClient();
   const fetching = useIsFetching();
   const mutating = useIsMutating();
   const [authorized, setAuthorized] = useState(
@@ -83,6 +89,7 @@ function Terminal({ config }: { config: Config }) {
     [bottom, setBottom] = useState("positions"),
     [dirty, setDirty] = useState(false),
     [picked, setPicked] = useState<Instrument[]>([]),
+    [showFunds, setShowFunds] = useState(() => localStorage.getItem("baglo_show_funds") !== "0"),
     [toast, setToast] = useState<{ message: string; error: boolean } | null>(
       null,
     ),
@@ -153,23 +160,60 @@ function Terminal({ config }: { config: Config }) {
     queryFn: ({ signal }) => api<Account>("/account", { signal }),
     enabled: authorized,
   });
+  const watchlist = useQuery({
+    queryKey: ["watchlist"],
+    queryFn: ({ signal }) => api<{ items: Instrument[]; symbols: string[] }>("/watchlist", { signal }),
+    enabled: authorized,
+  });
+  const savedInstruments = authorized
+    ? watchlist.data?.items || config.symbols
+    : config.symbols;
+  const saveWatchlist = useMutation({
+    mutationFn: (items: Instrument[]) =>
+      api<{ symbols: string[] }>("/watchlist", {
+        method: "PUT",
+        body: JSON.stringify({ symbols: items.map((item) => item.symbol) }),
+      }),
+    onSuccess: () => {
+      setPicked([]);
+      void queryClient.invalidateQueries({ queryKey: ["watchlist"] });
+      void queryClient.invalidateQueries({ queryKey: ["account"] });
+    },
+    onError: (error: Error) => notify(error.message, true),
+  });
   const instruments = useMemo(() => {
     const map = new Map<string, Instrument>();
     for (const i of [
-      ...config.symbols,
+      ...savedInstruments,
       ...picked,
+      selected,
     ])
       map.set(i.symbol, { ...map.get(i.symbol), ...i });
     return [...map.values()];
-  }, [config.symbols, picked]);
+  }, [savedInstruments, picked, selected]);
   const current =
     instruments.find((i) => i.symbol === selected.symbol) || selected;
+  const watchItems = saveWatchlist.isPending ? picked : savedInstruments;
   const select = (item: Instrument) => {
     setSelected(item);
-    setPicked((previous) =>
-      [item, ...previous.filter((i) => i.symbol !== item.symbol)].slice(0, 8),
-    );
     setDirty(false);
+  };
+  const remember = (items: Instrument[]) => {
+    const map = new Map(savedInstruments.map((item) => [item.symbol, item]));
+    if (items.every((item) => map.has(item.symbol))) return;
+    for (const item of items) map.set(item.symbol, { ...map.get(item.symbol), ...item });
+    const next = [...map.values()].slice(-30);
+    setPicked(next);
+    saveWatchlist.mutate(next);
+  };
+  const toggleCurrentWatch = () => {
+    if (!authorized) return void beginLogin();
+    const exists = savedInstruments.some((item) => item.symbol === current.symbol);
+    const next = exists
+      ? savedInstruments.filter((item) => item.symbol !== current.symbol)
+      : [...savedInstruments, current];
+    setPicked(next);
+    saveWatchlist.mutate(next);
   };
   const history = useInfiniteQuery({
     queryKey: ["history", current.symbol],
@@ -284,8 +328,22 @@ function Terminal({ config }: { config: Config }) {
               <strong>{money(ledger?.cash)}</strong>
             </div>
             <div>
-              <span>可用資金</span>
-              <strong>{ledger ? money(ledger.cash - reserved) : "—"}</strong>
+              <span>
+                可用資金
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={showFunds ? "隱藏可用資金" : "顯示可用資金"}
+                  onClick={() => {
+                    const next = !showFunds;
+                    setShowFunds(next);
+                    localStorage.setItem("baglo_show_funds", next ? "1" : "0");
+                  }}
+                >
+                  {showFunds ? <Eye size={13} /> : <EyeOff size={13} />}
+                </Button>
+              </span>
+              <strong>{showFunds ? (ledger ? money(ledger.cash - reserved) : "—") : "••••••"}</strong>
             </div>
             <div>
               <span>委託保留</span>
@@ -358,6 +416,15 @@ function Terminal({ config }: { config: Config }) {
                 onDirty={setDirty}
                 enabled={true}
               />
+              <Button
+                variant={watchItems.some((item) => item.symbol === current.symbol) ? "default" : "outline"}
+                size="sm"
+                disabled={saveWatchlist.isPending}
+                onClick={toggleCurrentWatch}
+              >
+                <Star size={14} />
+                {watchItems.some((item) => item.symbol === current.symbol) ? "移除自選" : "加入自選"}
+              </Button>
             </div>
           )}
           <div hidden={view !== "trade"}>
@@ -368,13 +435,7 @@ function Terminal({ config }: { config: Config }) {
                   <span className="caption">收盤參考</span>
                 </div>
                 <div className="watchlist">
-                  {instruments
-                    .filter(
-                      (i) =>
-                        config.symbols.some((s) => s.symbol === i.symbol) ||
-                        picked.some((s) => s.symbol === i.symbol),
-                    )
-                    .map((i) => (
+                  {watchItems.map((i) => (
                       <button
                         key={i.symbol}
                         className={
@@ -389,6 +450,7 @@ function Terminal({ config }: { config: Config }) {
                         <b>{money(i.price)}</b>
                       </button>
                     ))}
+                  {!watchItems.length && <p className="empty">尚無自選股，請先搜尋股票後加入。</p>}
                 </div>
                 <div className="watchlist-note">
                   上市櫃普通股
@@ -498,6 +560,7 @@ function Terminal({ config }: { config: Config }) {
               current={current}
               notify={notify}
               onAccepted={() => setReceipt(true)}
+              onWatchlist={remember}
             />
           )}
           {view === "positions" && (

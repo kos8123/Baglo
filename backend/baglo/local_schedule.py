@@ -41,6 +41,13 @@ def selection_tick(store,markets,account,current):
         return
     symbols=report.get('selected_symbols') or ([report['selected_symbol']] if report.get('selected_symbol') else [])
     if report['status']!='completed' or not symbols:return
+    def remember(state):
+        watchlist=state.setdefault('watchlist',[])
+        for symbol in symbols:
+            if symbol not in watchlist:watchlist.append(symbol)
+        state['watchlist']=watchlist[-30:]
+        return state,None
+    store.mutate(account,remember)
     for symbol in symbols:
         state=store.read(account)
         job_id='daily-'+current.date().isoformat()+'-'+symbol

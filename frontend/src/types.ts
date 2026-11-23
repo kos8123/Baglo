@@ -54,6 +54,7 @@ export interface Account {
   positions: Record<string, number>;
   orders: Order[];
   mode: string;
+  watchlist?: string[];
 }
 export interface Config {
   environment: string;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api, pct, money, dateLabel } from "../lib";
 import { Button } from "./ui/button";
@@ -51,6 +51,7 @@ export function AutoTrading(props: {
   current: Instrument;
   notify: (message: string, error?: boolean) => void;
   onAccepted: () => void;
+  onWatchlist: (items: Instrument[]) => void;
 }) {
   const [details, setDetails] = useState<string | null>(null);
   const report = useQuery({
@@ -78,6 +79,14 @@ export function AutoTrading(props: {
     onError: (e: Error) => props.notify(e.message, true),
   });
   const job = report.data?.job;
+  const selectedKey = (job?.selected_symbols || []).join(",");
+  useEffect(() => {
+    if (job?.status !== "completed" || !job.selected_symbols?.length) return;
+    props.onWatchlist(job.selected_symbols.map((symbol) => ({
+      symbol,
+      name: job.symbol_names?.[symbol] || symbol,
+    })));
+  }, [job?.id, job?.status, selectedKey]);
   const busy = !!job && ["queued", "running"].includes(job.status);
   return (
     <div className="automation-page">

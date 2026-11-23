@@ -199,6 +199,19 @@ def test_catalog_exports_all_supported_instruments(service,monkeypatch):
     assert body['total']==len(body['items']) and {'2330','6488'} <= symbols
 
 
+def test_watchlist_persists_and_returns_market_metadata(service,tmp_path,monkeypatch):
+    from baglo.store import Store
+    monkeypatch.setattr(api,'_markets',service)
+    monkeypatch.setattr(api,'_store',Store(path=str(tmp_path/'watchlist.db')))
+    auth={'http':{'method':'PUT'},'authorizer':{'jwt':{'claims':{'sub':'alice'}}}}
+    event={'requestContext':auth,'rawPath':'/api/watchlist','body':json.dumps({'symbols':['6488','2330']})}
+    assert api.handler(event,None)['statusCode']==200
+    event['requestContext']['http']['method']='GET';event.pop('body')
+    result=json.loads(api.handler(event,None)['body'])
+    assert result['symbols']==['6488','2330']
+    assert result['items'][0]['name']=='環球晶' and result['items'][0]['price']==40000
+
+
 def test_otc_history_lots_convert_to_shares(service,monkeypatch):
     old=service.fetcher
     def fetch(url,headers=None):

@@ -99,6 +99,12 @@ def handler(event, context):
             return response(200, portfolio(get_store().read(account), get_markets()))
         if method == 'GET' and path == '/api/account':
             return response(200, get_store().read(account))
+        if method == 'GET' and path == '/api/watchlist':
+            state=get_store().read(account)
+            symbols=state['watchlist'] if 'watchlist' in state else list(UNIVERSE)
+            registry=get_markets().index()
+            items=[registry[symbol] for symbol in symbols if symbol in registry]
+            return response(200,{'items':items,'symbols':[item['symbol'] for item in items]})
         raw = event.get('body') or '{}'
         if event.get('isBase64Encoded'):
             raw = base64.b64decode(raw).decode()
@@ -132,6 +138,15 @@ def handler(event, context):
         if method == 'POST' and path == '/api/backtests':
             from .backtest import start
             return response(202,start(account,body,get_markets()))
+        if method == 'PUT' and path == '/api/watchlist':
+            symbols=body.get('symbols')
+            if not isinstance(symbols,list) or len(symbols)>30 or len(set(symbols))!=len(symbols) or any(not isinstance(symbol,str) for symbol in symbols):
+                raise DomainError('自選股需為最多 30 檔不重複股票代號')
+            for symbol in symbols:get_markets().resolve(symbol)
+            def save_watchlist(state):
+                state['watchlist']=symbols[:]
+                return state,{'symbols':symbols}
+            return response(200,get_store().mutate(account,save_watchlist))
         if method == 'PUT' and path == '/api/ai/settings':
             from .ai import save_settings, settings
             # Validate the new universe once, outside optimistic ledger retries.
