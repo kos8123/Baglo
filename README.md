@@ -25,20 +25,44 @@ Baglo 是台股 AI 研究與模擬交易平台，用於展示 Serverless 雲端�
 
 ### High Level
 
-![Baglo high-level cloud architecture](docs/architecture/high-level.svg)
+![Baglo high-level cloud architecture](docs/architecture/high-level-baglo-architecture.png)
 
-主要請求由 Cloudflare Pages 進入 AWS Serverless 後端；登入由 Cognito 處理，API Gateway 將請求交給 Lambda，交易帳本與研究資料分別保存在 DynamoDB 與 S3。EventBridge Scheduler 觸發盤前分析、選股與 AI 模擬下單流程。
+High Level 圖呈現完整系統邊界與主要資料流。使用者從 Edge 前端進入系統，Cognito 負責帳號與 Google OAuth，API Gateway 將同步請求交給 Python API Lambda，DynamoDB 保存模擬帳務狀態，S3 保存研究、回測與稽核資料。EventBridge 依排程啟動盤前分析、AI 選股與模擬交易；TWSE、TPEx、Fugle 與 Gemini 位於 AWS 外部。底部則顯示 `dev`、`main` 對應的前後端部署流程。
 
 ### Low Level
 
-![Baglo low-level cloud architecture](docs/architecture/low-level.svg)
+![Baglo low-level cloud architecture](docs/architecture/baglo-low-level-architecture.png)
 
-- 公開 API 提供設定、標的搜尋與市場資料；帳戶、持倉、委託、自選股及 AI 操作必須帶 Cognito JWT。
-- Cloudflare R2 保存預先整理的日／週／月 K 線，Worker 負責回填與收盤後更新，減少每次開圖時直接呼叫上游行情 API。
-- `dev` 與 `prod` 使用獨立 CloudFormation stack；GitHub 變更由 CodePipeline、CodeBuild 與 SAM／CloudFormation 驗證及部署。
-- Cloudflare Pages 是目前主要前端；S3 + CloudFront 保留為 AWS 原生靜態網站路徑。
+Low Level 圖展開每個元件的責任與安全邊界：公開行情路由可以匿名讀取，帳戶、持倉、委託、自選股及 AI 操作則由 Cognito JWT 保護。API Lambda 透過 IAM 存取 DynamoDB 與 S3；排程 Lambda 依序完成資料驗證、盤前研究、候選股評分及風控後的模擬下單。Secrets Manager 保存第三方金鑰，CloudWatch 集中記錄執行狀態。`dev` 與 `prod` 使用隔離的 pipeline、stack、資料表、bucket 與身分資源。
 
 圖中的 AWS 服務圖示取自 [AWS Architecture Icons](https://aws.amazon.com/architecture/icons/)；Cloudflare、GitHub、Google 與資料供應商以中性方塊表示，避免誤認為 AWS 服務。
+
+### CI/CD Pipeline
+
+![Baglo CI/CD pipeline](docs/architecture/cicd-pipeline.png)
+
+`dev` 分支會進入開發 pipeline，完成測試、CloudFormation lint、SAM 驗證與封裝後部署至 `baglo-dev`；`main` 分支使用獨立的 production pipeline，並在部署 `baglo-prod` 前保留人工核准。前端與 Market Sync Worker 依分支產生 preview／production 版本。兩個環境的 stack、DynamoDB、S3 與 Cognito 資源彼此隔離，降低測試變更影響正式環境的風險。
+
+### GitHub Workflow
+
+![Baglo GitHub development workflow](docs/architecture/github-workflow.png)
+
+功能從短期 feature branch 開始，先執行本機測試，再透過 Pull Request 合併至 `dev` 並部署測試環境。確認登入、行情、K 線、模擬委託與 AI 流程後，再建立 `dev → main` 的 release PR。正式部署需要完整 CI、基礎設施差異檢查與人工核准；部署後執行 smoke test、查看 CloudWatch，必要時回復上一個已驗證版本。
+
+CI/CD 與 GitHub Workflow 圖使用 [Takumi CLI](https://takumi.kane.tw/docs/cli) 由版本化 HTML 產生，來源位於 `docs/architecture/`。
+
+## 開發過程遇到的難題
+
+| 問題 | 調整與解法 |
+| --- | --- |
+| Cloudflare 網域呼叫 API Gateway 時被 CORS 阻擋 | 將實際前端網域加入 API Gateway／Lambda CORS 設定，並區分公開路由與需要 Cognito JWT 的受保護路由。 |
+| K 線第一次載入超過十秒，而且部分股票歷史資料不足 | 將日、週、月 K 線預先整理後存入 R2，由 Market Sync Worker 回填歷史資料並在收盤後增量更新，前端優先讀取快取。 |
+| TPEx 來源發生重複導向，部分代號無法取得完整資料 | 加入來源驗證、逾時與 fallback；AI 選股前先檢查代號、名稱、流動性與歷史資料完整度，不足的標的直接略過。 |
+| 搜尋到股票後，下單區仍判定沒有選取；成功委託有時顯示失敗 | 將原生頁面遷移到 React 共用狀態，以 TanStack Query 管理伺服器資料，並使用 idempotency key 與明確的 API 成功狀態避免重複或錯誤提示。 |
+| 重新整理後自選股與 AI 選出的股票消失 | 將自選股、AI 設定、候選股與執行紀錄依 Cognito 使用者保存到 DynamoDB，不再只放在瀏覽器記憶體。 |
+| 訪客、註冊會員與 Google 登入的權限需求不同 | 訪客僅能看盤；註冊、登入、Google OAuth 與 PKCE 交給 Cognito，交易、帳務與 AI API 統一驗證 JWT。 |
+| GitHub Connection、IAM 權限與 CloudFormation 更新曾造成 pipeline 失敗或 rollback | 使用 CodeConnections、最小權限 IAM、SAM／CloudFormation 驗證與 dev／prod 隔離；部署失敗先讀取 stack events，只清理已確認為空的殘留資源。 |
+| AI 模型可能遇到金鑰、額度或模型費用問題 | 金鑰集中放在 Secrets Manager，模型名稱改為部署參數；AI 呼叫失敗時不建立委託，並保留失敗原因供使用者查詢。 |
 
 ## 本機啟動
 
@@ -67,7 +91,7 @@ cfn-lint infra/template.yaml infra/bootstrap.yaml infra/codepipeline.yaml
 
 `dev` 對應測試環境；`main` 對應正式環境並保留人工核准。Cloudflare Pages 部署前端，AWS CodePipeline 驗證並部署後端與 IaC。
 
-[CI/CD 說明](docs/CICD.md) · [Cloudflare Pages](docs/CLOUDFLARE_PAGES.md) · [驗收清單](docs/ACCEPTANCE.md)
+[CI/CD 說明](docs/CICD.md)
 
 ## 限制
 

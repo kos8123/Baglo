@@ -1,0 +1,58 @@
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; width: 2400px; height: 1350px; padding: 54px 62px; background: #f7f9fb; color: #17202a; font-family: Arial, sans-serif; }
+  h1 { margin: 0; font-size: 48px; } .sub { margin-top: 8px; color: #5d6874; font-size: 22px; }
+  .frame { margin-top: 34px; border: 3px solid #232f3e; background: white; padding: 26px; }
+  .frame-title { font-size: 27px; font-weight: 700; margin-bottom: 20px; }
+  .lane { display: flex; align-items: center; min-height: 215px; border: 2px solid #aab2bb; margin-top: 18px; padding: 24px; gap: 18px; }
+  .lane.dev { border-left: 14px solid #147eba; } .lane.prod { border-left: 14px solid #dd3c2f; } .lane.edge { border-left: 14px solid #f48120; }
+  .badge { width: 120px; padding: 14px 8px; border-radius: 8px; color: white; font-weight: 700; font-size: 24px; text-align: center; }
+  .dev .badge { background: #147eba; } .prod .badge { background: #dd3c2f; } .edge .badge { background: #f48120; }
+  .node { width: 210px; min-height: 145px; padding: 14px 10px; border: 2px solid #c7ccd1; background: #fff; text-align: center; }
+  .node img { width: 66px; height: 66px; display: block; margin: 0 auto 8px; }
+  .node .name { font-size: 20px; font-weight: 700; } .node .desc { margin-top: 6px; font-size: 15px; color: #64707c; line-height: 1.25; }
+  .arrow { width: 42px; height: 4px; background: #3d4852; position: relative; flex: none; }
+  .arrow:after { content: ""; position: absolute; right: -1px; top: -7px; border-left: 14px solid #3d4852; border-top: 9px solid transparent; border-bottom: 9px solid transparent; }
+  .approval { width: 190px; min-height: 145px; border: 2px dashed #dd3c2f; padding: 36px 12px; text-align: center; font-size: 20px; font-weight: 700; background: #fff8f7; }
+  .bottom { display: flex; margin-top: 24px; gap: 24px; }
+  .panel { flex: 1; border: 2px solid #9aa4ae; background: white; padding: 20px 24px; }
+  .panel h2 { margin: 0 0 12px; font-size: 23px; }
+  .panel ul { margin: 0; padding-left: 26px; columns: 2; font-size: 18px; line-height: 1.6; color: #48535e; }
+</style>
+<h1>Baglo — CI/CD Pipeline</h1>
+<div class="sub">Isolated development and production deployments · AWS SAM / CloudFormation · Cloudflare edge delivery</div>
+
+<div class="frame">
+  <div class="frame-title">AWS serverless backend delivery</div>
+  <div class="lane dev">
+    <div class="badge">DEV</div>
+    <div class="node"><div class="name">GitHub dev</div><div class="desc">Source branch</div></div><div class="arrow"></div>
+    <div class="node"><div class="name">CodeConnections</div><div class="desc">GitHub connection</div></div><div class="arrow"></div>
+    <div class="node"><img src="aws-icons/Arch_AWS-CodePipeline_64.svg"><div class="name">CodePipeline</div><div class="desc">Dev pipeline</div></div><div class="arrow"></div>
+    <div class="node"><img src="aws-icons/Arch_AWS-CodeBuild_64.svg"><div class="name">CodeBuild</div><div class="desc">Test · validate · package</div></div><div class="arrow"></div>
+    <div class="node"><div class="name">AWS SAM</div><div class="desc">Serverless package</div></div><div class="arrow"></div>
+    <div class="node"><img src="aws-icons/Arch_AWS-CloudFormation_64.svg"><div class="name">CloudFormation</div><div class="desc">baglo-dev stack</div></div>
+  </div>
+  <div class="lane prod">
+    <div class="badge">PROD</div>
+    <div class="node"><div class="name">GitHub main</div><div class="desc">Release branch</div></div><div class="arrow"></div>
+    <div class="node"><div class="name">CodeConnections</div><div class="desc">GitHub connection</div></div><div class="arrow"></div>
+    <div class="node"><img src="aws-icons/Arch_AWS-CodePipeline_64.svg"><div class="name">CodePipeline</div><div class="desc">Production pipeline</div></div><div class="arrow"></div>
+    <div class="node"><img src="aws-icons/Arch_AWS-CodeBuild_64.svg"><div class="name">CodeBuild</div><div class="desc">Test · validate · package</div></div><div class="arrow"></div>
+    <div class="approval">Manual approval</div><div class="arrow"></div>
+    <div class="node"><img src="aws-icons/Arch_AWS-CloudFormation_64.svg"><div class="name">CloudFormation</div><div class="desc">baglo-prod stack</div></div>
+  </div>
+  <div class="lane edge">
+    <div class="badge">EDGE</div>
+    <div class="node"><div class="name">GitHub</div><div class="desc">dev / main</div></div><div class="arrow"></div>
+    <div class="node"><div class="name">Frontend build</div><div class="desc">React · TypeScript · Vite</div></div><div class="arrow"></div>
+    <div class="node"><div class="name">Static site</div><div class="desc">Preview / production</div></div><div class="arrow"></div>
+    <div class="node"><div class="name">Worker build</div><div class="desc">Wrangler validation</div></div><div class="arrow"></div>
+    <div class="node"><div class="name">Market Sync Worker</div><div class="desc">Dev / production worker</div></div>
+  </div>
+</div>
+
+<div class="bottom">
+  <div class="panel"><h2>Automated validation</h2><ul><li>Python tests</li><li>Frontend tests</li><li>TypeScript validation</li><li>Frontend production build</li><li>CloudFormation lint</li><li>SAM template validation</li></ul></div>
+  <div class="panel"><h2>Environment isolation</h2><ul><li>Separate CloudFormation stacks</li><li>Separate DynamoDB tables</li><li>Separate S3 buckets</li><li>Separate Cognito resources</li><li>Production manual approval</li><li>Branch-specific edge releases</li></ul></div>
+</div>
