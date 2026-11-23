@@ -16,14 +16,7 @@ import { aggregate } from "../chart-data";
 import type { Bar, Period } from "../types";
 import { Button } from "./ui/button";
 const names = { day: "日 K", week: "週 K", month: "月 K" };
-type RangeKey = "6m" | "1y" | "3y" | "5y" | "all";
-const defaultRanges: Record<Period, RangeKey> = { day: "1y", week: "3y", month: "all" };
-const rangeNames: Record<RangeKey, string> = { "6m": "6月", "1y": "1年", "3y": "3年", "5y": "5年", all: "全部" };
-const rangeCounts: Record<Period, Record<RangeKey, number>> = {
-  day: { "6m": 126, "1y": 252, "3y": 756, "5y": 1260, all: Infinity },
-  week: { "6m": 26, "1y": 52, "3y": 156, "5y": 260, all: Infinity },
-  month: { "6m": 6, "1y": 12, "3y": 36, "5y": 60, all: Infinity },
-};
+const defaultCounts: Record<Period, number> = { day: 252, week: 156, month: Infinity };
 export function PriceChart({
   symbol,
   bars,
@@ -52,7 +45,6 @@ export function PriceChart({
     userView = useRef(false),
     lookup = useRef(new Map<string, Bar>());
   const [period, setPeriod] = useState<Period>("day"),
-    [rangeKey, setRangeKey] = useState<RangeKey>(defaultRanges.day),
     [readout, setReadout] = useState<Bar | null>(null);
   const data = useMemo(() => aggregate(bars, period), [bars, period]);
   useEffect(() => {
@@ -158,7 +150,7 @@ export function PriceChart({
       if (userView.current && prior)
         chart.current.timeScale().setVisibleRange(prior);
       else {
-        const count = rangeCounts[period][rangeKey];
+        const count = defaultCounts[period];
         if (Number.isFinite(count))
           chart.current.timeScale().setVisibleLogicalRange({
             from: Math.max(0, data.length - count) - 0.5,
@@ -167,7 +159,7 @@ export function PriceChart({
         else chart.current.timeScale().fitContent();
       }
     }
-  }, [data, symbol, period, rangeKey]);
+  }, [data, symbol, period]);
   const zoom = (factor: number) => {
     const instance = chart.current;
     if (!instance) return;
@@ -181,7 +173,13 @@ export function PriceChart({
   };
   const reset = () => {
     userView.current = false;
-    setRangeKey(defaultRanges[period]);
+    const count = defaultCounts[period];
+    if (Number.isFinite(count))
+      chart.current?.timeScale().setVisibleLogicalRange({
+        from: Math.max(0, data.length - count) - 0.5,
+        to: data.length + 2,
+      });
+    else chart.current?.timeScale().fitContent();
   };
   return (
     <section className="chart-panel">
@@ -193,28 +191,9 @@ export function PriceChart({
               variant="ghost"
               aria-pressed={period === p}
               className={period === p ? "selected" : ""}
-              onClick={() => {
-                setPeriod(p);
-                setRangeKey(defaultRanges[p]);
-              }}
+              onClick={() => setPeriod(p)}
             >
               {names[p]}
-            </Button>
-          ))}
-        </div>
-        <div className="segmented" aria-label="K 線顯示範圍">
-          {(Object.keys(rangeNames) as RangeKey[]).map((key) => (
-            <Button
-              key={key}
-              variant="ghost"
-              aria-pressed={rangeKey === key}
-              className={rangeKey === key ? "selected" : ""}
-              onClick={() => {
-                userView.current = false;
-                setRangeKey(key);
-              }}
-            >
-              {rangeNames[key]}
             </Button>
           ))}
         </div>
@@ -249,7 +228,6 @@ export function PriceChart({
             aria-label="顯示全部歷史"
             onClick={() => {
               userView.current = true;
-              setRangeKey("all");
               chart.current?.timeScale().fitContent();
             }}
           >
