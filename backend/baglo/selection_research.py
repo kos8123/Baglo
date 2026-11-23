@@ -7,6 +7,28 @@ from . import backtest
 from .domain import DomainError,now
 
 _pool=ThreadPoolExecutor(max_workers=1)
+SHORTLIST_SIZE=12
+SELECTION_SIZE=3
+
+
+def market_shortlist(markets, holdings=(), limit=SHORTLIST_SIZE):
+    """Deterministic, auditable pre-screen; the model never scans 1,900 raw rows."""
+    rows=list(markets.index().values())
+    if not rows:raise DomainError('全市場清單暫時無法取得')
+    latest=max(row.get('as_of','') for row in rows)
+    eligible=[row for row in rows if row.get('as_of')==latest and row.get('price') and
+              row.get('turnover') is not None and row['turnover']>=20_000_000 and
+              not row.get('stale_cache') and
+              (row.get('change') is None or abs(row['change'])<=row['price']*.07)]
+    eligible.sort(key=lambda row:(-row['turnover'],row['symbol']))
+    held=[symbol for symbol in holdings if symbol in {row['symbol'] for row in rows}]
+    symbols=[]
+    for symbol in held+[row['symbol'] for row in eligible]:
+        if symbol not in symbols:symbols.append(symbol)
+        if len(symbols)>=limit:break
+    if not symbols:raise DomainError('沒有股票通過流動性與資料品質初篩')
+    return symbols,{'market_total':len(rows),'as_of':latest,'minimum_turnover':20_000_000,
+                    'shortlist_size':len(symbols),'held_included':len([s for s in held if s in symbols])}
 
 
 def propose(symbol,bars,model=None):
@@ -22,12 +44,14 @@ def start(store,markets,account,source='manual'):
     from .ai import configured,settings,current_model
     if os.getenv('BAGLO_TABLE') and not os.getenv('BAGLO_SELECTION_WORKER'):raise DomainError('尚未設定雲端選股 Worker',503)
     if not configured():raise DomainError('請先設定模型金鑰',409)
-    policy=settings(store.read(account))
-    if not policy['symbols']:raise DomainError('請先加入候選股票並儲存')
-    # Bounded batch, never silently truncate a user's universe.
-    if len(policy['symbols'])>20:raise DomainError('單次研究最多 20 檔；請縮小候選池以控制資料與模型用量')
+    state=store.read(account);policy=settings(state)
+    if hasattr(markets,'index'):
+        symbols,screening=market_shortlist(markets,(state.get('positions') or {}).keys())
+    else:  # Narrow test/local adapters retain their explicit fixture universe.
+        symbols,screening=policy['symbols'][:20],{'market_total':len(policy['symbols']),'shortlist_size':len(policy['symbols'])}
+    if not symbols:raise DomainError('沒有可研究的候選股票')
     day=datetime.now(ZoneInfo('Asia/Taipei')).date().isoformat()
-    job={'id':str(uuid.uuid4()),'kind':'ai_selection','status':'queued','created_at':now(),'source':source,'day':day,'model':current_model(),'symbols':policy['symbols'][:],'results':[], 'notes':['模型僅收到前 60% 開發日線；參數凍結後，以中間 20% 驗證排名，最後 20% 僅展示，未用於排名。','模型可能從預訓練得知歷史資訊；這不是嚴格無污染的樣本外證明，真正驗證需開始後的模擬紀錄。','股票各自以 30 萬元獨立回測，不能加總為投資組合績效。未還原權息、存活者偏差、漲跌停與交割限制仍存在。','評分＝驗證報酬－0.5×最大回撤；驗證報酬須正、超過同成本買入持有、至少兩筆交易、最大回撤不超過20%，否則保留現金。']}
+    job={'id':str(uuid.uuid4()),'kind':'ai_selection','status':'queued','created_at':now(),'source':source,'day':day,'model':current_model(),'symbols':symbols,'screening':screening,'results':[], 'notes':['先依前一交易日成交金額、資料新鮮度與極端漲跌條件做全市場初篩；既有持倉優先納入。','模型僅收到前 60% 開發日線；參數凍結後，以中間 20% 驗證排名，最後 20% 僅展示，未用於排名。','模型可能從預訓練得知歷史資訊；這不是嚴格無污染的樣本外證明，真正驗證需開始後的模擬紀錄。','股票各自以 30 萬元獨立回測，不能加總為投資組合績效。未還原權息、存活者偏差、漲跌停與交割限制仍存在。','評分＝驗證報酬－0.5×最大回撤；驗證報酬須正、超過同成本買入持有、至少兩筆交易、最大回撤不超過20%，否則保留現金。']}
     def claim(state):
         prior=state.get('ai_selection_job')
         if prior:
@@ -81,7 +105,8 @@ def run(account,job_id,markets,index=None):
             job.update(status='failed',error='後續選股 Worker 無法啟動，停止研究、未選股或下單',completed_at=now());backtest.write(account,job)
         return
     ranked=sorted((r for r in job['results'] if r['status']=='completed' and r['eligible']),key=lambda r:(-r['score'],r['symbol']))
-    job.update(status='completed' if any(r['status']=='completed' for r in job['results']) else 'failed',selected_symbol=ranked[0]['symbol'] if ranked else None,completed_at=now())
+    selected=[row['symbol'] for row in ranked[:SELECTION_SIZE]]
+    job.update(status='completed' if any(r['status']=='completed' for r in job['results']) else 'failed',selected_symbols=selected,selected_symbol=selected[0] if selected else None,completed_at=now())
     if job['status']=='failed':job['error']='所有候選研究失敗，保留現金'
     backtest.write(account,job)
 
@@ -94,7 +119,8 @@ def public(job):
 def validate_trade(account,report_id,symbol,action):
     report=backtest.read(account,report_id)
     day=datetime.now(ZoneInfo('Asia/Taipei')).date().isoformat()
-    if report['status']!='completed' or report.get('day')!=day or report.get('selected_symbol')!=symbol:raise DomainError('當日 AI 回測未選中此股票，不建立自動委託',409)
+    selected=report.get('selected_symbols') or ([report['selected_symbol']] if report.get('selected_symbol') else [])
+    if report['status']!='completed' or report.get('day')!=day or symbol not in selected:raise DomainError('當日 AI 回測未選中此股票，不建立自動委託',409)
     frozen=next((x for x in report.get('frozen_strategies',[]) if x['symbol']==symbol),None)
     if not frozen:raise DomainError('缺少凍結策略，停止自動委託',409)
     bars=frozen['bars'];rule=frozen['rule'];closes=[b['close'] for b in bars]

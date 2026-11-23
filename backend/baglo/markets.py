@@ -164,9 +164,13 @@ def normalize_prices(rows, source, fetched_at, stale=False):
             continue
         price = cents(row.get('ClosingPrice') if source == 'TWSE' else row.get('Close'))
         change = number(row.get('Change'))
+        volume = number(row.get('TradeVolume') if source == 'TWSE' else row.get('TradingShares'))
+        turnover = number(row.get('TradeValue') if source == 'TWSE' else row.get('TransactionAmount'))
         instruments.append({'symbol': code, 'name': name, 'exchange': source,
             'instrument_type': 'common_stock', 'trading_unit': 1000,
             'price': price, 'change': int(round(change*100)) if change is not None else None,
+            'volume': int(volume) if volume is not None and volume >= 0 else None,
+            'turnover': int(turnover) if turnover is not None and turnover >= 0 else None,
             'as_of': day, 'source': source, 'fetched_at': fetched_at, 'stale_cache': stale})
     if not instruments:
         raise DataUnavailable('來源沒有可支援的普通股資料')

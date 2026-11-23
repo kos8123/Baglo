@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, dateLabel, money } from "../lib";
 import type { Config, Instrument } from "../types";
 import { Button } from "./ui/button";
-import { StockSearch } from "./StockSearch";
 import { Dialog } from "./ui/dialog";
 interface Settings {
   enabled: boolean;
@@ -61,11 +60,6 @@ export function AiTrading({
         : q.state.data?.settings.enabled
           ? 15000
           : false,
-  });
-  const [analysisStock, setAnalysisStock] = useState(current);
-  const [searchDirty, setSearchDirty] = useState(false);
-  const [names, setNames] = useState<Record<string, string>>({
-    [current.symbol]: current.name,
   });
   const [changed, setChanged] = useState(false);
   const encoded = JSON.stringify(status.data?.settings);
@@ -171,7 +165,7 @@ export function AiTrading({
         {
           <section className="panel ai-settings">
             <div className="panel-heading">
-              <h2>交易設定與候選池</h2>
+              <h2>全市場 AI 模擬設定</h2>
             </div>
             <label className="check-field">
               <input
@@ -228,71 +222,10 @@ export function AiTrading({
               設得高通常會少交易，但不保證比較準或比較賺；達門檻後仍要通過資金、持倉與行情檢查。AI
               分數是否可靠需累積建議與結果驗證；可在下方回測比較驗證績效。
             </p>
-            <div className="ai-pool-search">
-              <label>加入自動模擬標的</label>
-              <StockSearch
-                autoSelectExact={false}
-                selected={analysisStock}
-                enabled={enabled}
-                onDirty={setSearchDirty}
-                onSelect={(item) => {
-                  setAnalysisStock(item);
-                  setSearchDirty(false);
-                  setNames((previous) => ({
-                    ...previous,
-                    [item.symbol]: item.name,
-                  }));
-                  setChanged(true);
-                  if (!policy.symbols.includes(item.symbol))
-                    setPolicy((previous) => ({
-                      ...previous,
-                      symbols: [...previous.symbols, item.symbol],
-                    }));
-                }}
-              />
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={
-                searchDirty || policy.symbols.includes(analysisStock.symbol)
-              }
-              onClick={() => {
-                setChanged(true);
-                setPolicy({
-                  ...policy,
-                  symbols: [...policy.symbols, analysisStock.symbol],
-                });
-              }}
-            >
-              加入目前股票 {analysisStock.symbol} {analysisStock.name}
-            </Button>
-            <div className="ai-pool-list">
-              {policy.symbols.map((symbol) => (
-                <div key={symbol}>
-                  <span>
-                    {symbol}{" "}
-                    {names[symbol] ||
-                      config.symbols.find((i) => i.symbol === symbol)?.name ||
-                      (current.symbol === symbol ? current.name : "")}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label={"移除 " + symbol}
-                    onClick={() => {
-                      setChanged(true);
-                      setPolicy({
-                        ...policy,
-                        symbols: policy.symbols.filter((s) => s !== symbol),
-                      });
-                    }}
-                  >
-                    移除
-                  </Button>
-                </div>
-              ))}
-            </div>
+            <p className="notice">
+              不需自行加入股票。系統會依前一交易日成交金額、資料新鮮度與極端漲跌條件，
+              從上市櫃普通股初篩 12 檔，再由 AI 回測選出最多 3 檔。既有持倉優先納入檢查。
+            </p>
 
             <Button
               disabled={!enabled || save.isPending}
@@ -305,8 +238,7 @@ export function AiTrading({
               {changed ? "儲存設定（有未儲存變更）" : "儲存設定"}
             </Button>
             <p className="panel-footnote">
-              本機服務運行時，平日 08:30 起分析、09:05 起
-              驗證即時行情後送模擬單。每日先回測候選池，至多選出一檔，再分析當日訊號；未達條件就保留現金。13:00
+              平日 08:30 起分析、09:05 起驗證即時行情後送模擬單。每日先做全市場初篩與回測，至多選出三檔，再分析當日訊號；未達條件就保留現金。13:00
               後不啟動新選股研究。電腦休眠或服務停止時不會執行。假日、缺資料、觀望或風控不符則跳過，不補造決策。關閉設定可立即停止後續自動委託。
             </p>
           </section>

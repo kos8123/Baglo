@@ -12,6 +12,18 @@ def test_proposal_rejects_unexecutable_model_parameters(monkeypatch):
     with pytest.raises(DomainError):sr.propose('2330',[])
 
 
+def test_market_shortlist_is_liquid_auditable_and_keeps_holdings():
+    rows={
+        '2330':{'symbol':'2330','price':100000,'change':1000,'turnover':900_000_000,'as_of':'2026-11-23','stale_cache':False},
+        '2317':{'symbol':'2317','price':20000,'change':100,'turnover':500_000_000,'as_of':'2026-11-23','stale_cache':False},
+        '1101':{'symbol':'1101','price':4000,'change':0,'turnover':1_000_000,'as_of':'2026-11-23','stale_cache':False},
+        '6488':{'symbol':'6488','price':40000,'change':0,'turnover':None,'as_of':'2026-11-23','stale_cache':False},
+    }
+    symbols,audit=sr.market_shortlist(SimpleNamespace(index=lambda:rows),['1101'],limit=3)
+    assert symbols==['1101','2330','2317']
+    assert audit['market_total']==4 and audit['held_included']==1 and audit['minimum_turnover']==20_000_000
+
+
 def test_research_model_receives_only_development_and_never_changes_ledger(tmp_path,monkeypatch):
     monkeypatch.chdir(tmp_path)
     bars=[]

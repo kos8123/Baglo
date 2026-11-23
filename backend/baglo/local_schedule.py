@@ -39,17 +39,19 @@ def selection_tick(store,markets,account,current):
     if not report or report.get('day')!=current.date().isoformat():
         if (current.hour,current.minute)<(13,0):start(store,markets,account,'schedule')
         return
-    symbol=report.get('selected_symbol')
-    if report['status']!='completed' or not symbol:return
-    job_id='daily-'+current.date().isoformat()+'-'+symbol
-    job=next((j for j in state.get('ai_jobs',[]) if j['id']==job_id),None)
-    if not job:
-        if (current.hour,current.minute)<(13,20):enqueue(store,markets,account,symbol,'schedule')
-        return
-    if job['status']!='completed' or job.get('order_id') or job.get('auto_attempted_at') or (current.hour,current.minute)<(9,5):return
-    update_job(store,account,job_id,{'auto_attempted_at':current.isoformat(),'selection_report_id':report['id']})
-    try:execute(store,markets,account,job_id,automatic=True)
-    except DomainError as exc:update_job(store,account,job_id,{'execution_note':str(exc)})
+    symbols=report.get('selected_symbols') or ([report['selected_symbol']] if report.get('selected_symbol') else [])
+    if report['status']!='completed' or not symbols:return
+    for symbol in symbols:
+        state=store.read(account)
+        job_id='daily-'+current.date().isoformat()+'-'+symbol
+        job=next((j for j in state.get('ai_jobs',[]) if j['id']==job_id),None)
+        if not job:
+            if (current.hour,current.minute)<(13,20):enqueue(store,markets,account,symbol,'schedule')
+            continue
+        if job['status']!='completed' or job.get('order_id') or job.get('auto_attempted_at') or (current.hour,current.minute)<(9,5):continue
+        update_job(store,account,job_id,{'auto_attempted_at':current.isoformat(),'selection_report_id':report['id']})
+        try:execute(store,markets,account,job_id,automatic=True)
+        except DomainError as exc:update_job(store,account,job_id,{'execution_note':str(exc)})
 
 
 def start():
