@@ -10,7 +10,7 @@ phases:
   build:
     commands:
       - python -m pytest -q
-      - node --experimental-strip-types --test tests/*.test.ts
+      - if [ -z "$BAGLO_FRONTEND_URL" ]; then node --experimental-strip-types --test tests/*.test.ts; fi
       - cfn-lint infra/template.yaml infra/bootstrap.yaml infra/codepipeline.yaml
       - if [ -z "$BAGLO_FRONTEND_URL" ]; then python scripts/build_frontend.py; else mkdir -p dist; fi
       - bash -n scripts/deploy.sh scripts/setup_codepipeline.sh scripts/setup_secrets.sh scripts/cloudshell_start.sh
