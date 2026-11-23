@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useIsFetching,
+  useIsMutating,
+  useQuery,
+} from "@tanstack/react-query";
 import {
   Activity,
   ChartCandlestick,
@@ -8,6 +13,7 @@ import {
   LogIn,
   LogOut,
   LockKeyhole,
+  LoaderCircle,
   Wallet,
   X,
   ArrowRight,
@@ -44,6 +50,7 @@ export default function App() {
         <span>b.</span>Baglo
       </div>
       <h1>{init.error ? "無法連接服務" : "載入交易工作台"}</h1>
+      {!init.error && <LoaderCircle className="spin" size={24} />}
       <p>{init.error?.message || "正在讀取設定與帳戶狀態…"}</p>
       {init.error && (
         <Button onClick={() => void init.refetch()}>重新連線</Button>
@@ -52,6 +59,8 @@ export default function App() {
   );
 }
 function Terminal({ config }: { config: Config }) {
+  const fetching = useIsFetching();
+  const mutating = useIsMutating();
   const [authorized, setAuthorized] = useState(
       config.environment === "local" || !!sessionStorage.getItem("baglo_token"),
     ),
@@ -78,6 +87,7 @@ function Terminal({ config }: { config: Config }) {
       null,
     ),
     [receipt, setReceipt] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
   useEffect(() => {
     location.hash = view;
   }, [view]);
@@ -111,6 +121,16 @@ function Terminal({ config }: { config: Config }) {
       return;
     }
     setView(next);
+  };
+  const beginLogin = async () => {
+    setSigningIn(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 650));
+      await login(config);
+    } catch (error) {
+      setSigningIn(false);
+      notify(error instanceof Error ? error.message : "無法開啟登入", true);
+    }
   };
   useEffect(() => {
     if (!authorized && view !== "trade") setView("trade");
@@ -171,6 +191,23 @@ function Terminal({ config }: { config: Config }) {
       for (const bar of page.bars) map.set(bar.date, bar);
     return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
   }, [history.data]);
+  useEffect(() => {
+    if (
+      bars.length >= 120 ||
+      !history.hasNextPage ||
+      history.isFetching ||
+      history.isError
+    )
+      return;
+    const timer = setTimeout(() => void history.fetchNextPage(), 900);
+    return () => clearTimeout(timer);
+  }, [
+    current.symbol,
+    bars.length,
+    history.hasNextPage,
+    history.isFetching,
+    history.isError,
+  ]);
   const research = useQuery({
     queryKey: ["research", current.symbol],
     queryFn: ({ signal }) =>
@@ -236,13 +273,19 @@ function Terminal({ config }: { config: Config }) {
                 ? "本機模擬"
                 : "PAPER / " + config.environment.toUpperCase()}
           </div>
+          {(fetching > 0 || mutating > 0) && (
+            <div className="global-loading" role="status" aria-live="polite">
+              <LoaderCircle className="spin" size={15} />
+              <span>載入中</span>
+            </div>
+          )}
           {config.environment !== "local" && (
             <Button
               variant="ghost"
               size="sm"
               onClick={() => {
                 if (authorized) logout(config);
-                else void login(config).catch((e) => notify(e.message, true));
+                else void beginLogin();
               }}
             >
               {authorized ? <LogOut size={15} /> : <LogIn size={15} />}
@@ -294,7 +337,7 @@ function Terminal({ config }: { config: Config }) {
               <Button
                 size="sm"
                 onClick={() =>
-                  void login(config).catch((e) => notify(e.message, true))
+                  void beginLogin()
                 }
               >
                 登入／建立帳戶
@@ -536,6 +579,15 @@ function Terminal({ config }: { config: Config }) {
             <button aria-label="關閉通知" onClick={() => setToast(null)}>
               <X size={16} />
             </button>
+          </div>
+        )}
+        {signingIn && (
+          <div className="login-transition" role="status" aria-live="polite">
+            <div className="login-transition-mark">
+              <LoaderCircle className="spin" size={32} />
+            </div>
+            <strong>正在開啟安全登入</strong>
+            <span>登入後才會啟用個人交易與 AI 功能</span>
           </div>
         )}
         {receipt && (

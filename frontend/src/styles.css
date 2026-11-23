@@ -1189,11 +1189,44 @@ footer {
 .spin {
   animation: rotate 1.4s linear infinite;
 }
+.global-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  font-size: 11px;
+}
 @keyframes rotate {
   to {
     transform: rotate(360deg);
   }
 }
+.login-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  background: rgb(14 18 23 / 92%);
+  backdrop-filter: blur(10px);
+  animation: login-fade 180ms ease-out;
+}
+.login-transition-mark {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  color: var(--accent);
+  background: #1b222a;
+  border: 1px solid #52683e;
+  box-shadow: 0 0 0 10px rgb(210 247 121 / 5%);
+}
+.login-transition strong { font-size: 18px; }
+.login-transition span { color: var(--muted); font-size: 12px; }
+@keyframes login-fade { from { opacity: 0; } }
 @media (min-width: 1600px) {
   .terminal-grid {
     grid-template-columns: 220px minmax(400px, 1fr) 330px;
