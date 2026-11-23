@@ -34,17 +34,17 @@ def t(x: int, y: int, value: str, size: int = 16, weight: int = 500,
 
 def service(x: int, y: int, icon: str, title: str, subtitle: str = "", size: int = 64) -> str:
     parts = [f'<image x="{x-size//2}" y="{y-size//2}" width="{size}" height="{size}" href="{uri(icon)}"/>',
-             t(x, y + size//2 + 23, title, 14, 600)]
+             t(x, y + size//2 + 25, title, 16, 600)]
     if subtitle:
-        parts.append(t(x, y + size//2 + 42, subtitle, 11, 400, color="#5f6b7a"))
+        parts.append(t(x, y + size//2 + 48, subtitle, 13, 400, color="#5f6b7a"))
     return "".join(parts)
 
 
 def ext(x: int, y: int, w: int, h: int, title: str, subtitle: str = "", color: str = "#687078") -> str:
     parts = [f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="4" fill="#fff" stroke="{color}" stroke-width="2"/>',
-             t(x + w//2, y + 29, title, 14, 600)]
+             t(x + w//2, y + 28, title, 16, 600)]
     if subtitle:
-        parts.append(t(x + w//2, y + 49, subtitle, 11, 400, color="#5f6b7a"))
+        parts.append(t(x + w//2, y + 50, subtitle, 13, 400, color="#5f6b7a"))
     return "".join(parts)
 
 
@@ -56,7 +56,7 @@ def boundary(x: int, y: int, w: int, h: int, title: str, color: str, icon: str |
     if icon:
         parts.append(f'<image x="{x+10}" y="{y+9}" width="30" height="30" href="{uri(icon)}"/>')
         tx = x + 50
-    parts.append(t(tx, y + 31, title, 17, 700, "start"))
+    parts.append(t(tx, y + 32, title, 20, 700, "start"))
     return "".join(parts)
 
 
@@ -68,9 +68,9 @@ def line(points: list[tuple[int, int]], label: str = "", dashed: bool = False,
     parts = [f'<path d="{path}" fill="none" stroke="{color}" stroke-width="2"{dash}{marker}/>']
     if label:
         x, y = points[len(points)//2]
-        width = max(70, len(label) * 7 + 14)
-        parts += [f'<rect x="{x-width//2}" y="{y-17}" width="{width}" height="21" fill="#fff"/>',
-                  t(x, y - 2, label, 11, 500, color="#3f4852")]
+        width = max(82, len(label) * 8 + 18)
+        parts += [f'<rect x="{x-width//2}" y="{y-21}" width="{width}" height="27" fill="#fff"/>',
+                  t(x, y - 3, label, 13, 500, color="#3f4852")]
     return "".join(parts)
 
 
@@ -100,18 +100,18 @@ def high_level() -> str:
         line([(865, 285), (955, 285)], "invoke"),
         line([(1025, 285), (1215, 285)], "state"),
         line([(1025, 305), (1120, 305), (1120, 610), (1380, 610)], "objects"),
-        line([(697, 485), (803, 485)], "trigger"),
-        line([(867, 485), (953, 485)], "features"),
-        line([(1017, 485), (1103, 485)], "selection"),
+        line([(697, 485), (803, 485)]),
+        line([(867, 485), (953, 485)]),
+        line([(1017, 485), (1103, 485)]),
         line([(1165, 485), (1250, 485), (1250, 325)], "paper orders"),
         line([(1570, 270), (1520, 270), (1520, 215), (665, 215), (665, 253)], "OAuth", True),
         line([(1570, 420), (1480, 420), (1480, 400), (835, 400), (835, 453)], "market data"),
         line([(1570, 535), (1460, 535), (1460, 400), (1135, 400), (1135, 453)], "AI analysis"),
-        line([(805, 680), (805, 545)], "secrets", True),
-        line([(1025, 680), (1025, 545)], "logs", True),
-        line([(260, 915), (513, 915)], "source"),
-        line([(577, 915), (708, 915)], "test"),
-        line([(772, 915), (908, 915)], "package"),
+        line([(805, 680), (805, 545)], dashed=True),
+        line([(1025, 680), (1025, 545)], dashed=True),
+        line([(260, 915), (513, 915)]),
+        line([(577, 915), (708, 915)]),
+        line([(772, 915), (908, 915)]),
         line([(1000, 915), (1180, 915), (1180, 810)], "AWS deploy", True),
         line([(260, 920), (170, 920), (170, 775)], "frontend deploy", True),
     ]
@@ -148,8 +148,8 @@ def low_level() -> str:
         boundary(430, 110, 1100, 830, "AWS Cloud", "#232f3e", "cloud"),
         boundary(460, 165, 1040, 735, "Region · us-east-1", "#00a4a6", "region", True, "#fbfdfe"),
         boundary(500, 220, 220, 290, "Identity & API", "#8c4fff", fill="#fdfbff"),
-        boundary(760, 220, 430, 540, "Compute", "#ed7100", fill="#fffaf5"),
-        boundary(1230, 220, 230, 540, "Data", "#3f8624", fill="#fbfdf9"),
+        boundary(750, 220, 470, 540, "Compute", "#ed7100", fill="#fffaf5"),
+        boundary(1250, 220, 210, 540, "Data", "#3f8624", fill="#fbfdf9"),
         boundary(500, 790, 960, 85, "Security & observability", "#dd344c", fill="#fffafa"),
         boundary(30, 145, 350, 650, "Cloudflare Edge", "#f38020", fill="#fffdf9"),
         boundary(1570, 145, 200, 650, "Providers", "#687078", fill="#fafafa"),
@@ -159,21 +159,21 @@ def low_level() -> str:
         line([(95, 330), (130, 330), (130, 255), (160, 255)], "HTTPS"),
         line([(330, 245), (400, 245), (400, 300), (575, 300)], "login"),
         line([(330, 265), (420, 265), (420, 430), (575, 430)], "API"),
-        line([(635, 430), (820, 430)], "invoke"),
-        line([(880, 430), (1285, 430)], "read/write"),
+        line([(635, 430), (788, 430)], "invoke"),
+        line([(852, 430), (1283, 430)], "read/write"),
         line([(330, 390), (330, 455)], "read"),
         line([(260, 585), (260, 515)], "write"),
-        line([(882, 610), (918, 610)], "trigger"),
-        line([(982, 610), (1018, 610)], "features"),
-        line([(1082, 610), (1118, 610)], "selection"),
-        line([(1120, 640), (1120, 705), (1285, 705)], "orders"),
-        line([(880, 400), (970, 400), (970, 300), (1285, 300)], "reports"),
+        line([(852, 630), (918, 630)], "trigger"),
+        line([(982, 630), (1048, 630)], "features"),
+        line([(1112, 630), (1148, 630)], "selection"),
+        line([(1212, 630), (1240, 630), (1240, 430), (1283, 430)], "paper orders"),
+        line([(852, 400), (980, 400), (980, 300), (1283, 300)], "reports"),
         line([(1670, 270), (1535, 270), (1535, 300), (635, 300)], "OIDC", True),
-        line([(1570, 420), (1515, 420), (1515, 540), (880, 540)], "market data"),
-        line([(1570, 555), (1515, 555), (1515, 430), (880, 430)], "quotes"),
-        line([(1570, 690), (1190, 690), (1190, 610), (1120, 610)], "AI"),
-        line([(660, 830), (820, 830), (820, 670)], "secrets", True),
-        line([(1030, 830), (970, 830), (970, 670)], "logs", True),
+        line([(1570, 420), (1515, 420), (1515, 520), (950, 520), (950, 598)], "market data"),
+        line([(1570, 555), (1515, 555), (1515, 430), (852, 430)], "quotes"),
+        line([(1570, 690), (1180, 690), (1180, 662)], "AI"),
+        line([(660, 830), (950, 830), (950, 662)], "secrets", True),
+        line([(1030, 830), (970, 830), (970, 662)], "logs", True),
         line([(1315, 737), (1315, 798)], "origin"),
         line([(250, 1060), (468, 1060)], "source"),
         line([(532, 1060), (688, 1060)], "test"),
@@ -189,11 +189,13 @@ def low_level() -> str:
         ext(160, 585, 170, 60, "Market Worker", "backfill + refresh", "#f38020"),
         service(605, 300, "cognito", "Amazon Cognito", "email + Google OAuth"),
         service(605, 430, "api", "API Gateway", "public + JWT routes"),
-        service(850, 430, "lambda", "API Lambda", "orders · portfolio · watchlist"),
-        service(850, 610, "eventbridge", "EventBridge", "Taipei schedules"),
-        service(950, 610, "lambda", "Premarket", "technical · fundamental · flow"),
-        service(1050, 610, "lambda", "Selection", "universe + scoring"),
-        service(1150, 610, "lambda", "AI Worker", "risk + paper orders"),
+        t(985, 285, "Synchronous API request handling", 15, 700, color="#9a4800"),
+        service(820, 430, "lambda", "API Lambda", "orders · portfolio · watchlist"),
+        t(985, 560, "Scheduled AI paper-trading workflow", 15, 700, color="#9a4800"),
+        service(820, 630, "eventbridge", "EventBridge"),
+        service(950, 630, "lambda", "Premarket"),
+        service(1080, 630, "lambda", "Selection"),
+        service(1180, 630, "lambda", "AI Worker"),
         service(1315, 300, "s3", "Research S3", "audit · reports · backtests"),
         service(1315, 430, "dynamodb", "DynamoDB", "cash · positions · orders"),
         service(1315, 705, "s3", "Website S3", "AWS-native option"),
