@@ -11,7 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
     flowTitle: "From data to trade, one step at a time.",
     s1t: "Market data", s2t: "AI picks & strategy", s3t: "Backtest & risk", s4t: "Paper orders", s5t: "Review & adjust",
     roadTitle: "The goal: fully automated trading.",
-    r1: "Paper validation", r2: "Close the automated loop", r3: "Fully automated trading",
+    r1: "Paper validation", r2: "Automatic orders and stop-loss", r3: "Fully automated trading",
     trustTitle: "Clear boundaries.",
     t1t: "Paper trading only", t1: "Cash, positions and orders are all virtual. No brokerage, and we never take your money.",
     t2t: "Google sign-in only recognizes you", t2: "We use only openid, email and profile. We never read Gmail or Drive, sell your data or use it for ads.",
@@ -29,7 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const en = lang === "en";
     document.documentElement.lang = en ? "en" : "zh-Hant-TW";
     nodes.forEach(node => { node.innerHTML = en ? english[node.dataset.i18n] || chinese.get(node) : chinese.get(node); });
-    toggle.textContent = en ? "繁中" : "EN";
+    toggle.setAttribute("aria-checked", String(en));
     document.title = en ? "Baglo — Taiwan Stock AI Paper Trading" : "Baglo — 台股 AI 模擬交易";
   };
   apply();

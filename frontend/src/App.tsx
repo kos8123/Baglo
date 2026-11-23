@@ -330,7 +330,7 @@ function Terminal({ config }: { config: Config }) {
           <div className="wordmark">
             Baglo<span className="product-name">{tr("交易終端", language)}</span>
           </div>
-          <Button variant="ghost" size="sm" onClick={changeLanguage} aria-label="Switch language">{language === "en" ? "繁中" : "EN"}</Button>
+          <button type="button" role="switch" aria-checked={language === "en"} className="lang-switch" onClick={changeLanguage} aria-label="Switch language / 切換語言"><span className="lang-knob" aria-hidden="true" /><span className="lang-opt">中</span><span className="lang-opt">EN</span></button>
           <div className="connection">
             <i />
             {config.demo

@@ -64,7 +64,7 @@ export function PriceChart({
       layout: {
         background: { type: ColorType.Solid, color: "#1c2229" },
         textColor: "#94a3b8",
-        fontSize: 11,
+        fontSize: 13,
         attributionLogo: true,
       },
       grid: {
