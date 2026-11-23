@@ -108,7 +108,10 @@ async function sync(env) {
   if (state.completedDay === today) return;
 
   let catalog = await readJson(bucket, "sync/catalog.json", null);
-  if (!catalog?.items?.length || state.cursor === 0) {
+  // The exchange catalog changes rarely and is already persisted in R2.
+  // Do not refetch it whenever a pass starts: TPEx rejects some Cloudflare
+  // egress addresses with an /errors redirect loop.
+  if (!catalog?.items?.length) {
     catalog = await loadCatalog();
     await bucket.put("sync/catalog.json", JSON.stringify(catalog), {
       httpMetadata: { contentType: "application/json" },
