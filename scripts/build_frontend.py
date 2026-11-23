@@ -2,12 +2,26 @@
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
+
+def add_site_verification(page, token):
+    """Insert the Google Search Console HTML-tag token so the home page can be verified."""
+    token = token.strip()
+    if not token:
+        return
+    if not re.fullmatch(r'[A-Za-z0-9_-]{10,100}', token):
+        raise ValueError('BAGLO_GOOGLE_SITE_VERIFICATION must be the content value of the google-site-verification meta tag')
+    html = page.read_text()
+    if 'google-site-verification' in html:
+        return
+    tag = f'<meta name="google-site-verification" content="{token}"/>'
+    page.write_text(html.replace('<head>', '<head>' + tag, 1))
 
 def build(output, api_base='', landing=False, market_base=''):
     if api_base:
@@ -34,6 +48,7 @@ def build(output, api_base='', landing=False, market_base=''):
             raise RuntimeError('Cloudflare build requires both the terminal and public home page')
         app.replace(output/'terminal.html')
         home.replace(output/'index.html')
+        add_site_verification(output/'index.html', os.getenv('BAGLO_GOOGLE_SITE_VERIFICATION', ''))
     swagger=frontend/'node_modules/swagger-ui-dist'
     (output/'docs').mkdir(exist_ok=True)
     for name in ['swagger-ui-bundle.js','swagger-ui.css','LICENSE']:
