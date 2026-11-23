@@ -25,7 +25,7 @@ export async function onRequestGet({ env, params, request }) {
   const input = new URL(request.url);
   const months = Number(input.searchParams.get("months") || "3");
   const offset = Number(input.searchParams.get("offset") || "0");
-  if (!/^[1-8]\d{3}$/.test(symbol) || !Number.isInteger(months) || months < 1 || months > 6 || !Number.isInteger(offset) || offset < 0 || offset > 114)
+  if (!/^[1-8]\d{3}$/.test(symbol) || !Number.isInteger(months) || months < 1 || months > 120 || !Number.isInteger(offset) || offset < 0 || offset > 114)
     return new Response(JSON.stringify({ error: "K 線查詢範圍不正確" }), { status: 400, headers: jsonHeaders });
 
   const origin = String(env.BAGLO_API_BASE || "").replace(/\/$/, "");
@@ -41,8 +41,7 @@ export async function onRequestGet({ env, params, request }) {
     if (cached && Date.now() - saved < 6 * 3600_000)
       return new Response(cached.body, { headers: { ...jsonHeaders, "X-Baglo-Cache": "HIT" } });
     const full = await bucket.get(`history/v1/${symbol}/full.json`);
-    const fullSaved = Number(full?.customMetadata?.savedAt || 0);
-    if (full && Date.now() - fullSaved < 48 * 3600_000) {
+    if (full) {
       const data = fromFullHistory(await full.json(), months, offset);
       if (data.bars.length)
         return new Response(JSON.stringify(data), { headers: { ...jsonHeaders, "X-Baglo-Cache": "PREFILL" } });
@@ -50,14 +49,15 @@ export async function onRequestGet({ env, params, request }) {
   }
 
   try {
-    const upstream = await fetch(`${origin}/api/history/${symbol}?months=${months}&offset=${offset}`, {
+    const upstreamMonths = Math.min(months, 6);
+    const upstream = await fetch(`${origin}/api/history/${symbol}?months=${upstreamMonths}&offset=${offset}`, {
       headers: { Accept: "application/json" },
       cf: { cacheTtl: 300, cacheEverything: true },
     });
     const body = await upstream.arrayBuffer();
     if (!upstream.ok)
       return new Response(body, { status: upstream.status, headers: { ...jsonHeaders, "X-Baglo-Cache": "MISS" } });
-    if (bucket)
+    if (bucket && months <= 6)
       await bucket.put(key, body, {
         httpMetadata: { contentType: "application/json; charset=utf-8" },
         customMetadata: { savedAt: String(Date.now()) },

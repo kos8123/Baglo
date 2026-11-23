@@ -175,12 +175,11 @@ function Terminal({ config }: { config: Config }) {
     queryKey: ["history", current.symbol],
     queryFn: ({ pageParam, signal }) =>
       marketApi<History>(
-        "/history/" + current.symbol + "?months=3&offset=" + pageParam,
+        "/history/" + current.symbol + "?months=120&offset=" + pageParam,
         signal,
       ),
     initialPageParam: 0,
-    getNextPageParam: (_last, pages) =>
-      pages.length * 3 < 120 ? pages.length * 3 : undefined,
+    getNextPageParam: () => undefined,
     enabled: true,
     staleTime: 6 * 3600000,
     gcTime: 30 * 60000,
@@ -191,23 +190,6 @@ function Terminal({ config }: { config: Config }) {
       for (const bar of page.bars) map.set(bar.date, bar);
     return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
   }, [history.data]);
-  useEffect(() => {
-    if (
-      bars.length >= 120 ||
-      !history.hasNextPage ||
-      history.isFetching ||
-      history.isError
-    )
-      return;
-    const timer = setTimeout(() => void history.fetchNextPage(), 900);
-    return () => clearTimeout(timer);
-  }, [
-    current.symbol,
-    bars.length,
-    history.hasNextPage,
-    history.isFetching,
-    history.isError,
-  ]);
   const research = useQuery({
     queryKey: ["research", current.symbol],
     queryFn: ({ signal }) =>
