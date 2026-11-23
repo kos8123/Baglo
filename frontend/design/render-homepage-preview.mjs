@@ -6,6 +6,6 @@ const directory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 let html = fs.readFileSync(path.join(directory, 'home.html'), 'utf8');
 html = html.replace(/<link rel="stylesheet" href="\/([^"]+)">/g, (_, name) => `<style>${fs.readFileSync(path.join(directory, name), 'utf8')}</style>`);
 html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
-html = html.replace(/url\("\/fonts\/([^\"]+)"\)/g, (_, name) => `url("${path.join(directory, 'fonts', name)}")`);
+html = html.replace('</head>', '<style>body{font-family:"Heiti SC",sans-serif} .market-art{transform:none}</style></head>');
 fs.writeFileSync('/tmp/baglo-homepage-takumi.html', html);
 console.log('/tmp/baglo-homepage-takumi.html');
