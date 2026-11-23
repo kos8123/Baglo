@@ -53,6 +53,6 @@ def test_cloudflare_pages_build_has_public_home_legal_and_terminal_routes():
     function=(ROOT/'functions/market/history/[symbol].js').read_text()
     assert 'BAGLO_MARKET_CACHE' in function and 'BAGLO_API_BASE' in function
     worker=(ROOT/'workers/market-sync.js').read_text()
-    assert 'BACKFILL_BATCH_SIZE = 1' in worker and 'TARGET_MONTHS = 120' in worker and 'completedDay' in worker
+    assert 'BACKFILL_SCAN_SIZE = 10' in worker and 'TARGET_MONTHS = 120' in worker and 'completedDay' in worker
     wrangler=(ROOT/'wrangler.market-sync.toml').read_text()
     assert 'bucket_name = "baglo-market-cache"' in wrangler

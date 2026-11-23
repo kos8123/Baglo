@@ -1,11 +1,40 @@
-const BACKFILL_BATCH_SIZE = 1;
+const BACKFILL_SCAN_SIZE = 10;
 const REFRESH_BATCH_SIZE = 40;
 const TARGET_MONTHS = 120;
+const ORDER_VERSION = 2;
 const CATALOG_SOURCES = [
   "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL",
   "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes",
 ];
 const PRIORITY_SYMBOLS = ["2330", "2317", "2454", "2308", "2881", "2882"];
+
+function orderCatalog(items) {
+  const bySymbol = new Map(items.map((item) => [item.symbol, item]));
+  const ordered = PRIORITY_SYMBOLS.map((symbol) => bySymbol.get(symbol)).filter(Boolean);
+  const used = new Set(ordered.map((item) => item.symbol));
+  const groups = new Map();
+  for (const item of items) {
+    if (used.has(item.symbol)) continue;
+    const group = groups.get(item.symbol[0]) || [];
+    group.push(item);
+    groups.set(item.symbol[0], group);
+  }
+  const keys = [...groups.keys()].sort();
+  for (const group of groups.values()) group.sort((a, b) => a.symbol.localeCompare(b.symbol));
+  const indexes = new Map(keys.map((key) => [key, 0]));
+  while (true) {
+    let added = false;
+    for (const key of keys) {
+      const index = indexes.get(key);
+      const item = groups.get(key)[index];
+      if (!item) continue;
+      ordered.push(item);
+      indexes.set(key, index + 1);
+      added = true;
+    }
+    if (!added) return ordered;
+  }
+}
 
 const taipeiDay = () => new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit",
@@ -100,10 +129,10 @@ async function sync(env) {
   const bucket = env.BAGLO_MARKET_CACHE;
   const today = taipeiDay();
   let state = await readJson(bucket, "sync/state.json", {
-    cursor: 0, completedDay: "", phase: "backfill", targetMonths: TARGET_MONTHS,
+    cursor: 0, completedDay: "", phase: "backfill", targetMonths: TARGET_MONTHS, orderVersion: ORDER_VERSION,
   });
-  if (state.targetMonths !== TARGET_MONTHS) {
-    state = { cursor: 0, completedDay: "", phase: "backfill", targetMonths: TARGET_MONTHS };
+  if (state.targetMonths !== TARGET_MONTHS || state.orderVersion !== ORDER_VERSION) {
+    state = { cursor: 0, completedDay: "", phase: "backfill", targetMonths: TARGET_MONTHS, orderVersion: ORDER_VERSION };
   }
   if (state.completedDay === today) return;
 
@@ -117,22 +146,38 @@ async function sync(env) {
       httpMetadata: { contentType: "application/json" },
     });
   }
+  catalog.items = orderCatalog(catalog.items);
 
-  const batchSize = state.phase === "backfill" ? BACKFILL_BATCH_SIZE : REFRESH_BATCH_SIZE;
-  const items = catalog.items.slice(state.cursor, state.cursor + batchSize);
+  let items;
+  let next;
+  if (state.phase === "backfill") {
+    items = [];
+    next = state.cursor;
+    const stop = Math.min(catalog.items.length, state.cursor + BACKFILL_SCAN_SIZE);
+    while (next < stop) {
+      const candidate = catalog.items[next++];
+      const existing = await bucket.head(`history/v1/${candidate.symbol}/full.json`);
+      if (existing?.customMetadata?.months === String(TARGET_MONTHS)) continue;
+      items.push(candidate);
+      break;
+    }
+  } else {
+    items = catalog.items.slice(state.cursor, state.cursor + REFRESH_BATCH_SIZE);
+    next = state.cursor + items.length;
+  }
   const savedAt = String(Date.now());
   await Promise.all(items.map(async ({ symbol }) => {
     if (state.phase === "backfill") await backfillSymbol(origin, bucket, symbol, savedAt);
     else await refreshSymbol(origin, bucket, symbol, savedAt);
   }));
 
-  const next = state.cursor + items.length;
-  const complete = !items.length || next >= catalog.items.length;
+  const complete = next >= catalog.items.length;
   await bucket.put("sync/state.json", JSON.stringify({
     cursor: complete ? 0 : next,
     completedDay: complete ? today : state.completedDay,
     phase: complete && state.phase === "backfill" ? "refresh" : state.phase,
     targetMonths: TARGET_MONTHS,
+    orderVersion: ORDER_VERSION,
     total: catalog.items.length,
     updatedAt: new Date().toISOString(),
   }), { httpMetadata: { contentType: "application/json" } });
