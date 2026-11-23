@@ -20,7 +20,7 @@ import {
   RefreshCw,
   BriefcaseBusiness,
 } from "lucide-react";
-import { api, dateLabel, initialize, login, logout, money, pct } from "./lib";
+import { api, dateLabel, initialize, login, logout, marketApi, money, pct } from "./lib";
 import type {
   Account,
   Config,
@@ -174,9 +174,9 @@ function Terminal({ config }: { config: Config }) {
   const history = useInfiniteQuery({
     queryKey: ["history", current.symbol],
     queryFn: ({ pageParam, signal }) =>
-      api<History>(
+      marketApi<History>(
         "/history/" + current.symbol + "?months=3&offset=" + pageParam,
-        { signal },
+        signal,
       ),
     initialPageParam: 0,
     getNextPageParam: (_last, pages) =>

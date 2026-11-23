@@ -13,7 +13,7 @@ else
   command -v npx >/dev/null || { echo 'npx is required to install the pinned pnpm version'; exit 1; }
   npx --yes pnpm@11.25.0 --dir frontend install --frozen-lockfile
 fi
-python3 scripts/build_frontend.py --output dist --api-base "$BAGLO_API_BASE" --landing
+python3 scripts/build_frontend.py --output dist --api-base "$BAGLO_API_BASE" --market-base /market --landing
 test -f dist/index.html
 test -f dist/terminal.html
 test -f dist/privacy.html

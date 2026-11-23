@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 
-def build(output, api_base='', landing=False):
+def build(output, api_base='', landing=False, market_base=''):
     if api_base:
         parsed = urlsplit(api_base)
         if parsed.scheme != 'https' or not parsed.netloc or parsed.query or parsed.fragment or parsed.username:
@@ -38,12 +38,13 @@ def build(output, api_base='', landing=False):
     (output/'docs').mkdir(exist_ok=True)
     for name in ['swagger-ui-bundle.js','swagger-ui.css','LICENSE']:
         shutil.copyfile(swagger/name,output/'docs'/name)
-    (output/'config.json').write_text(json.dumps({'api_base': api_base.rstrip('/')})+'\n')
+    (output/'config.json').write_text(json.dumps({'api_base': api_base.rstrip('/'), 'market_base': market_base.rstrip('/')})+'\n')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', default='dist')
     parser.add_argument('--api-base', default='')
+    parser.add_argument('--market-base', default='')
     parser.add_argument('--landing', action='store_true')
     args = parser.parse_args()
-    build(args.output, args.api_base, args.landing)
+    build(args.output, args.api_base, args.landing, args.market_base)

@@ -44,6 +44,7 @@ export class ApiError extends Error {
   }
 }
 let apiBase = "";
+let marketBase = "";
 export async function api<T>(
   path: string,
   options: RequestInit = {},
@@ -98,6 +99,18 @@ export async function api<T>(
       response.status >= 500,
     );
   }
+  return data;
+}
+export async function marketApi<T>(path: string, signal?: AbortSignal): Promise<T> {
+  if (!marketBase) return api<T>(path, { signal });
+  const response = await fetch(marketBase + path, {
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(30000)])
+      : AbortSignal.timeout(30000),
+  });
+  const data = await response.json();
+  if (!response.ok)
+    throw new ApiError(data.error || "行情資料暫時無法取得", response.status, response.status >= 500);
   return data;
 }
 export async function submitPaperOrder(item: {
@@ -175,7 +188,9 @@ export function initialize() {
   return (bootstrap ??= (async () => {
     const response = await fetch("/config.json", { cache: "no-store" });
     if (!response.ok) throw new Error("無法讀取網站設定");
-    apiBase = ((await response.json()).api_base || "").replace(/\/$/, "");
+    const runtime = await response.json();
+    apiBase = (runtime.api_base || "").replace(/\/$/, "");
+    marketBase = (runtime.market_base || "").replace(/\/$/, "");
     const config = await api<Config>("/config");
     const query = new URLSearchParams(location.search);
     if (query.has("error")) {

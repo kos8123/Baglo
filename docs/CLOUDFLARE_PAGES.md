@@ -29,6 +29,15 @@ SKIP_DEPENDENCY_INSTALL=1
 
 `BAGLO_API_BASE` 是公開 API Gateway 網址，不是密鑰。`SKIP_DEPENDENCY_INSTALL` 避免 Pages 將根目錄的 Python 後端當成前端相依套件安裝；建置腳本會自行使用固定的 pnpm 版本安裝前端。Cloudflare Pages 會把 `home.html` 發布成網站根目錄，把交易工作台發布為乾淨網址 `/terminal`，並保留 `/privacy` 與 `/terms`。
 
+## R2 K 線快取
+
+1. 在 **Storage & databases → R2** 建立 bucket `baglo-market-cache`。
+2. 回到 Pages 專案的 **Settings → Bindings → R2 bucket bindings**。
+3. Variable name 輸入 `BAGLO_MARKET_CACHE`，bucket 選擇 `baglo-market-cache`，Production 與 Preview 都要設定。
+4. 重新部署。
+
+Pages Function 會先讀取 R2；未命中時才回源 AWS 公開 K 線 API，成功後保存 6 小時。沒有設定 binding 時會直接回源，不會影響現有網站。R2 不存帳戶、token 或 AI 資料。
+
 ## 將 Pages 網址加入 AWS
 
 第一次部署完成並取得固定網址（例如 `https://baglo.pages.dev`）後，從可信任的 CloudShell 執行：

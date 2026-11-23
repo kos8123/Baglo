@@ -49,3 +49,6 @@ def test_cloudflare_pages_build_has_public_home_legal_and_terminal_routes():
     assert 'FrontendUrl' in template['Parameters']
     client=template['Resources']['Client']['Properties']
     assert any('/terminal' in str(value) for value in client['CallbackURLs'])
+    assert '--market-base /market' in build
+    function=(ROOT/'functions/market/history/[symbol].js').read_text()
+    assert 'BAGLO_MARKET_CACHE' in function and 'BAGLO_API_BASE' in function
