@@ -69,7 +69,13 @@ export function PriceChart({
         horzLine: { color: "#9bafc5", labelBackgroundColor: "#526274" },
       },
       rightPriceScale: { borderColor: "#303a46", minimumWidth: 76 },
-      timeScale: { borderColor: "#303a46", rightOffset: 4, timeVisible: false },
+      timeScale: {
+        borderColor: "#303a46",
+        rightOffset: 0,
+        timeVisible: false,
+        fixLeftEdge: true,
+        fixRightEdge: true,
+      },
       localization: { locale: "zh-TW" },
       handleScroll: {
         mouseWheel: true,
@@ -125,6 +131,15 @@ export function PriceChart({
   }, [symbol, period]);
   useEffect(() => {
     if (!chart.current || !series.current || !volume.current) return;
+    const hasData = data.length > 0;
+    chart.current.applyOptions({
+      handleScroll: hasData
+        ? { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false }
+        : false,
+      handleScale: hasData
+        ? { mouseWheel: true, pinch: true, axisPressedMouseMove: true }
+        : false,
+    });
     const prior = chart.current.timeScale().getVisibleRange();
     lookup.current = new Map(data.map((b) => [b.date, b]));
     series.current.setData(
@@ -146,7 +161,7 @@ export function PriceChart({
         })),
     );
     setReadout(data.at(-1) || null);
-    if (data.length) {
+    if (hasData) {
       if (userView.current && prior)
         chart.current.timeScale().setVisibleRange(prior);
       else {
@@ -158,11 +173,11 @@ export function PriceChart({
           });
         else chart.current.timeScale().fitContent();
       }
-    }
+    } else chart.current.timeScale().resetTimeScale();
   }, [data, symbol, period]);
   const zoom = (factor: number) => {
     const instance = chart.current;
-    if (!instance) return;
+    if (!instance || !data.length) return;
     const r = instance.timeScale().getVisibleLogicalRange();
     if (!r) return;
     userView.current = true;
@@ -202,6 +217,7 @@ export function PriceChart({
             variant="ghost"
             size="icon"
             aria-label="放大 K 線"
+            disabled={!data.length}
             onClick={() => zoom(0.8)}
           >
             <Plus size={15} />
@@ -210,6 +226,7 @@ export function PriceChart({
             variant="ghost"
             size="icon"
             aria-label="縮小 K 線"
+            disabled={!data.length}
             onClick={() => zoom(1.25)}
           >
             <Minus size={15} />
@@ -218,6 +235,7 @@ export function PriceChart({
             variant="ghost"
             size="icon"
             aria-label="重設 K 線"
+            disabled={!data.length}
             onClick={reset}
           >
             <RotateCcw size={14} />
@@ -226,6 +244,7 @@ export function PriceChart({
             variant="ghost"
             size="icon"
             aria-label="顯示全部歷史"
+            disabled={!data.length}
             onClick={() => {
               userView.current = true;
               chart.current?.timeScale().fitContent();
@@ -272,10 +291,10 @@ export function PriceChart({
         role="img"
         aria-label={`${symbol} ${names[period]}，${data.length} 根 K 棒`}
         onWheel={() => {
-          userView.current = true;
+          if (data.length) userView.current = true;
         }}
         onPointerDown={() => {
-          userView.current = true;
+          if (data.length) userView.current = true;
         }}
       />
       <div className="chart-footer">
