@@ -3,7 +3,7 @@ main = "workers/market-sync.js"
 compatibility_date = "2026-11-23"
 
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["* * * * *"]
 
 [vars]
 BAGLO_API_BASE = "https://5ck9jrcbe3.execute-api.us-east-1.amazonaws.com"

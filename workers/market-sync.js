@@ -1,4 +1,4 @@
-const BACKFILL_BATCH_SIZE = 2;
+const BACKFILL_BATCH_SIZE = 1;
 const REFRESH_BATCH_SIZE = 40;
 const TARGET_MONTHS = 120;
 const CATALOG_SOURCES = [
@@ -72,8 +72,8 @@ function mergeHistory(parts) {
 }
 
 async function backfillSymbol(origin, bucket, symbol, savedAt) {
-  const parts = [];
   const offsets = Array.from({ length: TARGET_MONTHS / 6 }, (_, index) => index * 6);
+  const parts = [];
   for (let index = 0; index < offsets.length; index += 5) {
     parts.push(...await Promise.all(offsets.slice(index, index + 5)
       .map((offset) => fetchHistory(origin, symbol, 6, offset))));
