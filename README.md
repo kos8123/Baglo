@@ -13,7 +13,7 @@ Baglo 是台股 AI 研究與模擬交易平台，用於展示 Serverless 雲端�
 - 技術面、基本面、籌碼面資料與 AI 模擬建議。
 - AI 自動交易與回測流程；未通過資料、信心或風控條件時不建單。
 
-## 架構
+## 雲端架構
 
 - **Frontend:** React、TypeScript、Vite、TanStack Query、Lightweight Charts
 - **Hosting:** Cloudflare Pages、R2 K 線快取與 Worker 每日預填
@@ -23,18 +23,22 @@ Baglo 是台股 AI 研究與模擬交易平台，用於展示 Serverless 雲端�
 - **IaC / CI/CD:** AWS SAM / CloudFormation、CodePipeline、CodeBuild
 - **Data / AI:** TWSE、TPEx、Fugle、Gemini
 
-```mermaid
-flowchart LR
-    User --> Pages[Cloudflare Pages]
-    Pages --> API[API Gateway]
-    API --> Auth[Cognito]
-    API --> Lambda[Python Lambda]
-    Lambda --> DB[DynamoDB / S3]
-    Lambda --> Data[TWSE / TPEx / Fugle / Gemini]
-    GitHub --> CI[CodePipeline / CodeBuild]
-    CI --> Pages
-    CI --> Lambda
-```
+### High Level
+
+![Baglo high-level cloud architecture](docs/architecture/high-level.svg)
+
+主要請求由 Cloudflare Pages 進入 AWS Serverless 後端；登入由 Cognito 處理，API Gateway 將請求交給 Lambda，交易帳本與研究資料分別保存在 DynamoDB 與 S3。EventBridge Scheduler 觸發盤前分析、選股與 AI 模擬下單流程。
+
+### Low Level
+
+![Baglo low-level cloud architecture](docs/architecture/low-level.svg)
+
+- 公開 API 提供設定、標的搜尋與市場資料；帳戶、持倉、委託、自選股及 AI 操作必須帶 Cognito JWT。
+- Cloudflare R2 保存預先整理的日／週／月 K 線，Worker 負責回填與收盤後更新，減少每次開圖時直接呼叫上游行情 API。
+- `dev` 與 `prod` 使用獨立 CloudFormation stack；GitHub 變更由 CodePipeline、CodeBuild 與 SAM／CloudFormation 驗證及部署。
+- Cloudflare Pages 是目前主要前端；S3 + CloudFront 保留為 AWS 原生靜態網站路徑。
+
+圖中的 AWS 服務圖示取自 [AWS Architecture Icons](https://aws.amazon.com/architecture/icons/)；Cloudflare、GitHub、Google 與資料供應商以中性方塊表示，避免誤認為 AWS 服務。
 
 ## 本機啟動
 
