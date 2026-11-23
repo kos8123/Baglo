@@ -7,7 +7,8 @@ from . import backtest
 from .domain import DomainError,now
 
 _pool=ThreadPoolExecutor(max_workers=1)
-SHORTLIST_SIZE=12
+SHORTLIST_SIZE=40
+RESEARCH_LIMIT=12
 SELECTION_SIZE=3
 
 
@@ -27,8 +28,10 @@ def market_shortlist(markets, holdings=(), limit=SHORTLIST_SIZE):
         if symbol not in symbols:symbols.append(symbol)
         if len(symbols)>=limit:break
     if not symbols:raise DomainError('沒有股票通過流動性與資料品質初篩')
+    names={row['symbol']:row.get('name','') for row in rows if row['symbol'] in symbols}
     return symbols,{'market_total':len(rows),'as_of':latest,'minimum_turnover':20_000_000,
-                    'shortlist_size':len(symbols),'held_included':len([s for s in held if s in symbols])}
+                    'shortlist_size':len(symbols),'research_limit':RESEARCH_LIMIT,
+                    'held_included':len([s for s in held if s in symbols]),'symbol_names':names}
 
 
 def propose(symbol,bars,model=None):
@@ -48,10 +51,10 @@ def start(store,markets,account,source='manual'):
     if hasattr(markets,'index'):
         symbols,screening=market_shortlist(markets,(state.get('positions') or {}).keys())
     else:  # Narrow test/local adapters retain their explicit fixture universe.
-        symbols,screening=policy['symbols'][:20],{'market_total':len(policy['symbols']),'shortlist_size':len(policy['symbols'])}
+        symbols,screening=policy['symbols'][:20],{'market_total':len(policy['symbols']),'shortlist_size':len(policy['symbols']),'research_limit':min(RESEARCH_LIMIT,len(policy['symbols'])),'symbol_names':{}}
     if not symbols:raise DomainError('沒有可研究的候選股票')
     day=datetime.now(ZoneInfo('Asia/Taipei')).date().isoformat()
-    job={'id':str(uuid.uuid4()),'kind':'ai_selection','status':'queued','created_at':now(),'source':source,'day':day,'model':current_model(),'symbols':symbols,'screening':screening,'results':[], 'notes':['先依前一交易日成交金額、資料新鮮度與極端漲跌條件做全市場初篩；既有持倉優先納入。','模型僅收到前 60% 開發日線；參數凍結後，以中間 20% 驗證排名，最後 20% 僅展示，未用於排名。','模型可能從預訓練得知歷史資訊；這不是嚴格無污染的樣本外證明，真正驗證需開始後的模擬紀錄。','股票各自以 30 萬元獨立回測，不能加總為投資組合績效。未還原權息、存活者偏差、漲跌停與交割限制仍存在。','評分＝驗證報酬－0.5×最大回撤；驗證報酬須正、超過同成本買入持有、至少兩筆交易、最大回撤不超過20%，否則保留現金。']}
+    job={'id':str(uuid.uuid4()),'kind':'ai_selection','status':'queued','created_at':now(),'source':source,'day':day,'model':current_model(),'symbols':symbols,'symbol_names':screening.get('symbol_names',{}),'screening':screening,'results':[],'skipped':[], 'notes':['先依前一交易日成交金額、資料新鮮度與極端漲跌條件做全市場初篩；既有持倉優先納入。','資料不足 180 個完整交易日或月份缺漏的股票會先略過，不呼叫模型。','模型僅收到前 60% 開發日線；參數凍結後，以中間 20% 驗證排名，最後 20% 僅展示，未用於排名。','模型可能從預訓練得知歷史資訊；這不是嚴格無污染的樣本外證明，真正驗證需開始後的模擬紀錄。','股票各自以 30 萬元獨立回測，不能加總為投資組合績效。未還原權息、存活者偏差、漲跌停與交割限制仍存在。','評分＝驗證報酬－0.5×最大回撤；驗證報酬須正、超過同成本買入持有、至少兩筆交易、最大回撤不超過20%，否則保留現金。']}
     def claim(state):
         prior=state.get('ai_selection_job')
         if prior:
@@ -74,6 +77,7 @@ def run(account,job_id,markets,index=None):
     job=backtest.read(account,job_id);job['status']='running';backtest.write(account,job)
     candidates=job['symbols'] if index is None else job['symbols'][index:index+1]
     for symbol in candidates:
+        if len(job['results'])>=RESEARCH_LIMIT:break
         try:
             markets.resolve(symbol)
             collected={}
@@ -97,9 +101,11 @@ def run(account,job_id,markets,index=None):
             final=backtest.simulate(bars,request,start=bars[b]['date'],end=bars[-1]['date'])
             m=validation['metrics'];eligible=m['total_return']>0 and m['total_return']>benchmark['metrics']['total_return'] and m['trade_count']>=2 and m['max_drawdown']<=20
             row={'symbol':symbol,'status':'completed','rule':rule,'validation':validation,'benchmark':benchmark,'final_test':final,'score':m['total_return']-.5*m['max_drawdown'],'eligible':eligible,'data_sha256':frozen['data_sha256']}
-        except Exception as exc:row={'symbol':symbol,'status':'failed','error':str(exc) if isinstance(exc,DomainError) else '資料或策略研究失敗；未建立委託'}
-        job['results'].append(row);backtest.write(account,job)
-    if index is not None and index+1<len(job['symbols']):
+            job['results'].append(row)
+        except Exception as exc:
+            job.setdefault('skipped',[]).append({'symbol':symbol,'reason':str(exc) if isinstance(exc,DomainError) else '資料或策略研究失敗'})
+        backtest.write(account,job)
+    if index is not None and len(job['results'])<RESEARCH_LIMIT and index+1<len(job['symbols']):
         try:dispatch(account,job_id,index+1)
         except Exception:
             job.update(status='failed',error='後續選股 Worker 無法啟動，停止研究、未選股或下單',completed_at=now());backtest.write(account,job)
@@ -149,7 +155,7 @@ def worker(event,context):
         if state.get('ai_selection_job')!=job_id:return state,False
         claims=state.setdefault('ai_selection_claims',[])
         if index in claims:return state,False
-        if len(job['results'])!=index or job['status'] not in ('queued','running'):return state,False
+        if job['status'] not in ('queued','running'):return state,False
         claims.append(index);return state,True
     if not get_store().mutate(account,claim):return {'status':'duplicate_or_obsolete'}
     run(account,job_id,get_markets(),index)

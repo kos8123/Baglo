@@ -39,7 +39,9 @@ type Job = {
   results: Row[];
   selected_symbol?: string;
   selected_symbols?: string[];
-  screening?: { market_total: number; shortlist_size: number; as_of?: string };
+  symbol_names?: Record<string, string>;
+  skipped?: { symbol: string; reason: string }[];
+  screening?: { market_total: number; shortlist_size: number; research_limit?: number; as_of?: string };
   error?: string;
   notes: string[];
 };
@@ -97,8 +99,8 @@ export function AutoTrading(props: {
           當日技術／基本／籌碼分析 → 風控 → 模擬委託。
         </p>
         <div className="notice">
-          系統先從全市場縮小為 12 檔，每檔需一次模型策略請求；最多選出 3
-          檔，並各做一次當日分析。啟用每日模式後，不逐筆要求確認；所有委託僅存在模擬帳本。
+          系統先從全市場選出 40 檔流動性候選，再略過歷史資料不足的股票；只將前 12
+          檔資料完整的股票交給模型，最多選出 3 檔。啟用每日模式後不逐筆要求確認；所有委託僅存在模擬帳本。
         </div>
         <div className="backtest-actions">
           <Button
@@ -123,19 +125,20 @@ export function AutoTrading(props: {
                 completed: "研究完成",
                 failed: "研究失敗",
               }[job.status] || job.status}{" "}
-              · 已完成 {job.results.length}/{job.symbols.length} 檔
+              · 有效研究 {job.results.length}/{job.screening?.research_limit || 12} 檔
+              {job.skipped?.length ? ` · 已略過 ${job.skipped.length} 檔資料不足股票` : ""}
             </p>
             <h2>
               {job.status === "completed"
                 ? job.selected_symbols?.length || job.selected_symbol
-                  ? `本次選中 ${(job.selected_symbols || [job.selected_symbol]).filter(Boolean).join("、")}`
+                  ? `本次選中 ${(job.selected_symbols || [job.selected_symbol]).filter(Boolean).map((symbol) => `${symbol} ${job.symbol_names?.[symbol!] || ""}`.trim()).join("、")}`
                   : "本次保留現金：沒有標的通過驗證門檻"
                 : "研究期間不新增自動委託"}
             </h2>
             {job.error && <p className="inline-error">{job.error}</p>}
             {job.screening && (
               <p className="panel-footnote">
-                全市場 {job.screening.market_total} 檔 → 流動性與資料品質初篩 {job.screening.shortlist_size} 檔
+                全市場 {job.screening.market_total} 檔 → 流動性初篩 {job.screening.shortlist_size} 檔 → 完整歷史研究最多 {job.screening.research_limit || 12} 檔
                 {job.screening.as_of ? ` · 資料日 ${job.screening.as_of}` : ""}
               </p>
             )}
@@ -165,7 +168,7 @@ export function AutoTrading(props: {
                             )
                           }
                         >
-                          {row.symbol}
+                          {row.symbol} {job.symbol_names?.[row.symbol] || ""}
                         </Button>
                       </td>
                       <td>
@@ -208,7 +211,7 @@ export function AutoTrading(props: {
               .map((row) => (
                 <div className="notice" key={row.symbol}>
                   <div>
-                    <h3>{row.symbol} · AI 策略理由</h3>
+                    <h3>{row.symbol} {job.symbol_names?.[row.symbol] || ""} · AI 策略理由</h3>
                     <p>{row.rule?.reason || row.error}</p>
                     {row.validation && (
                       <p>

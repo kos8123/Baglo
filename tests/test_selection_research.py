@@ -24,6 +24,25 @@ def test_market_shortlist_is_liquid_auditable_and_keeps_holdings():
     assert audit['market_total']==4 and audit['held_included']==1 and audit['minimum_turnover']==20_000_000
 
 
+def test_research_skips_incomplete_history_until_twelve_valid_stocks(tmp_path,monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    symbols=[f'{1000+i}' for i in range(13)]
+    bars=[]
+    start=date(2025,11,1)
+    for i in range(240):
+        close=10000+i*10
+        bars.append({'date':(start+timedelta(days=i)).isoformat(),'open':close,'high':close+100,'low':close-100,'close':close,'volume':1000000})
+    job={'id':'33333333-3333-4333-8333-333333333333','status':'queued','created_at':sr.datetime.now().astimezone().isoformat(),'symbols':symbols,'results':[],'skipped':[],'model':'fixture-model','notes':[]}
+    backtest.write('alice',job)
+    monkeypatch.setattr(sr,'propose',lambda *args:{'strategy':'sma','fast':5,'slow':35,'lookback':15,'reason':'fixture'})
+    def history(symbol,**kwargs):
+        return {'bars':bars,'warnings':['missing']} if symbol==symbols[0] else {'bars':bars,'warnings':[]}
+    sr.run('alice',job['id'],SimpleNamespace(resolve=lambda s:None,history=history))
+    result=backtest.read('alice',job['id'])
+    assert len(result['results'])==12 and len(result['skipped'])==1
+    assert result['skipped'][0]['symbol']==symbols[0]
+
+
 def test_research_model_receives_only_development_and_never_changes_ledger(tmp_path,monkeypatch):
     monkeypatch.chdir(tmp_path)
     bars=[]
