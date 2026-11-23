@@ -1,54 +1,72 @@
-(() => {
+document.documentElement.classList.add("js");
+document.addEventListener("DOMContentLoaded", () => {
   const english = {
-    features: "Features", privacyNav: "Data & privacy", enter: "Enter platform ↗", eyebrow: "A workspace for curious investors",
-    headline: "Study the market.<br>Practice your judgment.", intro: "Follow Taiwan stocks, keep a watchlist, and explore AI research. Test your ideas with paper trading and build a process of your own.",
-    start: "Enter platform ↗", explore: "Explore the features ↓", guest: "Browse market data without signing in. Sign in to save your watchlist and paper portfolio.", sample: "Illustration · not live data", observe: "Observe. Understand. Then act.", virtual: "Starting virtual balance", paper: "Paper trading only",
-    featureTitle: "From an idea to a trading exercise.", f1title: "See the market clearly", f1: "Search Taiwan stocks by code or name. Explore daily, weekly, and monthly candlesticks and save stocks to your watchlist.", f2title: "Ask one more question with AI", f2: "Review technical, fundamental, and institutional data. Examine strategy reasoning and risks, then test with historical backtests.", f3title: "Build experience through practice", f3: "Place simulated board-lot and odd-lot orders. Review your virtual cash, positions, and order history.",
-    trustTitle: "Your account. Clear boundaries.", trustIntro: "Baglo is a Taiwan stock research and paper-trading app. All balances, positions, and orders are virtual. No brokerage connection or deposits.", googleTitle: "Google sign-in and your data", google: "Google sign-in is optional; email registration is also available. We request only openid, email, and profile to identify and sign in to your account. We do not access Gmail or Drive, sell this data, or use it for advertising.", aiTitle: "AI research uses public market data", ai: "Gemini generates text-based stock research. Google account identifiers are not sent to the model or used to train AI. Market data may be delayed. AI analysis and backtests do not guarantee profits.", readPrivacy: "Read our Privacy Policy ↗", closing: "Your next idea starts here.", privacy: "Privacy Policy", terms: "Terms of Service", contact: "Contact", disclaimer: "For education, research, and simulated practice. Not investment advice.", opening: "Opening the platform…"
+    navFlow: "How it works", navTrust: "Data & privacy", enter: "Enter platform",
+    eyebrow: "Baglo · Taiwan stock AI paper trading",
+    headline: 'Less impulse.<br>More <em>evidence.</em>',
+    lead: "Let AI plan the strategy, test it with backtests, then execute with paper trades.",
+    more: "Why Baglo", note: "Browse charts without signing in · Paper trading only, no real money",
+    sample: "Illustration", virtual: "Virtual balance",
+    ideaLabel: "Why Baglo", p1: "Hesitating at a stop-loss", p2: "Chasing a rally", p3: "Emotions cloud judgment",
+    statement: "So let AI plan the strategy,<br><em>and let rules execute.</em>",
+    flowLabel: "How it works", flowTitle: "From data to trade, one step at a time.",
+    s1t: "Market data", s1: "Taiwan stock charts, fundamentals and flows",
+    s2t: "AI picks & strategy", s2: "Gemini proposes candidates and strategies",
+    s3t: "Backtest & risk", s3: "Validated on history, or no order",
+    s4t: "Paper orders", s4: "Board and odd lots, virtual cash only",
+    s5t: "Review & adjust", s5: "Every decision is recorded",
+    roadLabel: "Direction", roadTitle: "The goal: fully automated trading.",
+    r1t: "Now", r1: "Paper validation", r2t: "Next", r2: "Close the automated loop", r3t: "Goal", r3: "Fully automated trading",
+    trustLabel: "Data & privacy", trustTitle: "Clear boundaries.",
+    t1t: "Paper trading only", t1: "All cash, positions and orders are virtual. No brokerage connection, no deposits.",
+    t2t: "Google sign-in only identifies you", t2: "We request only openid, email and profile. No Gmail or Drive access; never sold or used for ads.",
+    t3t: "AI reads public market data only", t3: "Gemini writes text analysis only. Account data is never sent to the model or used for training.",
+    readPrivacy: "Read the Privacy Policy",
+    closing: "Test your next idea with a strategy.",
+    disclaimer: "For education and simulated practice only. Not investment advice.",
+    privacy: "Privacy Policy", terms: "Terms of Service", contact: "Contact", opening: "Opening the platform…"
   };
-  Object.assign(english, {
-    eyebrow: "From emotional decisions to testable strategies",
-    headline: 'Less impulse.<br>More <span class="accent">evidence.</span>',
-    intro: "Hesitating at a stop-loss. Rushing into a rally. Baglo explores another approach: let AI propose a strategy, test it against history, and practice execution with paper trades.",
-    explore: "Why I built Baglo ↓",
-    originLabel: "01 / The idea behind Baglo",
-    originTitle: "From emotional trading<br>to full automation.",
-    originBody: "Baglo began with a personal trading frustration: a stop-loss or profit target can be easy to plan and hard to follow. Could AI help propose strategies, while code checks the rules and simulates execution?",
-    originBody2: "The goal is an automated loop from market data and stock selection to strategy validation, risk controls, and execution. Today, paper accounts help validate the process while automatic matching, position exits, and recovery are developed.",
-    goalLabel: "The direction", goalTitle: "Let rules execute. Let results speak.",
-    goalBody: "The aim is to update data, select stocks, validate strategies, execute within risk limits, and manage positions and exits automatically. Users focus on settings, risks, and exceptions while the system handles the routine.",
-    goalNow: "Today: paper validation", goalNowBody: "Market data, watchlists, AI research and backtests, simulated orders, and records.",
-    goalNext: "Next: complete the loop", goalNextBody: "Automatic matching, position management, stop-loss and profit rules, recovery, and long-term validation.",
-    goalFuture: "Goal: fully automated trading", goalFutureBody: "Operate the complete workflow reliably. Live trading requires a separate broker integration, risk checks, and reconciliation.",
-    featureTitle: "From observation to decisions you can review.",
-    f1title: "Research first. Build your watchlist.",
-    f1: "Explore daily, weekly, and monthly Taiwan stock charts. Track your watchlist and data dates, then review blind spots in your list and holdings.",
-    f2title: "AI proposes. Backtests challenge.",
-    f2: "Use technical, fundamental, and institutional data to develop strategies. Examine historical performance and trading costs, and keep uncertainty visible when data is incomplete.",
-    f3title: "Simulate by rules. Keep the record.",
-    f3: "Paper orders require data, confidence, and risk checks. Practice board-lot and odd-lot trading manually or with scheduled workflows, then review the results.",
-    step1: "Market data", step2: "AI strategy", step3: "Backtest & risk checks", step4: "Paper orders", step5: "Review & adjust",
-    closingLabel: "Every decision deserves another question",
-    closing: "Put your next idea to the test."
-  });
   const nodes = [...document.querySelectorAll("[data-i18n]")];
   const chinese = new Map(nodes.map(node => [node, node.innerHTML]));
+  const toggle = document.querySelector("#language");
   let lang = "zh-TW";
   try { lang = localStorage.getItem("baglo_language") || lang; } catch {}
   const apply = () => {
-    document.documentElement.lang = lang === "en" ? "en" : "zh-Hant-TW";
-    nodes.forEach(node => { node.innerHTML = lang === "en" ? english[node.dataset.i18n] || chinese.get(node) : chinese.get(node); });
-    document.querySelector("#language").textContent = lang === "en" ? "繁中" : "EN";
-    document.title = lang === "en" ? "Baglo — Taiwan Stock Paper Trading" : "Baglo — 台股模擬交易";
+    const en = lang === "en";
+    document.documentElement.lang = en ? "en" : "zh-Hant-TW";
+    nodes.forEach(node => { node.innerHTML = en ? english[node.dataset.i18n] || chinese.get(node) : chinese.get(node); });
+    toggle.textContent = en ? "繁中" : "EN";
+    document.title = en ? "Baglo — Taiwan Stock AI Paper Trading" : "Baglo — 台股 AI 模擬交易";
   };
   apply();
-  document.querySelector("#language").addEventListener("click", () => { lang = lang === "en" ? "zh-TW" : "en"; try { localStorage.setItem("baglo_language", lang); } catch {} apply(); });
+  toggle.addEventListener("click", () => {
+    lang = lang === "en" ? "zh-TW" : "en";
+    try { localStorage.setItem("baglo_language", lang); } catch {}
+    apply();
+  });
+
+  requestAnimationFrame(() => document.querySelectorAll(".hero .reveal").forEach(item => item.classList.add("visible")));
+  const items = document.querySelectorAll(".reveal:not(.hero .reveal)");
+  if ("IntersectionObserver" in window) {
+    const observer = new IntersectionObserver(entries => entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      entry.target.classList.add("visible");
+      observer.unobserve(entry.target);
+    }), { threshold: 0.15, rootMargin: "0px 0px -8% 0px" });
+    items.forEach(item => observer.observe(item));
+  } else {
+    items.forEach(item => item.classList.add("visible"));
+  }
+
+  const overlay = document.querySelector("#entry-transition");
   let entering = false;
   document.querySelectorAll("[data-enter]").forEach(link => link.addEventListener("click", event => {
     if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-    event.preventDefault(); if (entering) return; entering = true;
-    document.querySelector("#entry-transition").hidden = false;
+    event.preventDefault();
+    if (entering) return;
+    entering = true;
+    overlay.hidden = false;
     setTimeout(() => location.assign(link.href), matchMedia("(prefers-reduced-motion: reduce)").matches ? 150 : 2400);
   }));
-  addEventListener("pageshow", () => { entering = false; document.querySelector("#entry-transition").hidden = true; });
-})();
+  addEventListener("pageshow", () => { entering = false; overlay.hidden = true; });
+});

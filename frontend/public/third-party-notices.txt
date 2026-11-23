@@ -202,3 +202,6 @@ Copyright (с) 2025 TradingView, Inc. https://www.tradingview.com/
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+Lucide icons (homepage inline SVG icons)
+ISC License, Copyright (c) Lucide Contributors 2022. https://lucide.dev/license
