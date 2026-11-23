@@ -16,7 +16,7 @@ import { aggregate } from "../chart-data";
 import type { Bar, Period } from "../types";
 import { Button } from "./ui/button";
 const names = { day: "日 K", week: "週 K", month: "月 K" };
-const defaultCounts: Record<Period, number> = { day: 252, week: 156, month: Infinity };
+const defaultCounts: Record<Period, number> = { day: 1260, week: 416, month: 120 };
 export function PriceChart({
   symbol,
   bars,
