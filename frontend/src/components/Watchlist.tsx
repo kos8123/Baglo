@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LoaderCircle } from "lucide-react";
-import { api, dateLabel, money } from "../lib";
+import { api, ApiError, dateLabel, money } from "../lib";
 import type { Instrument } from "../types";
 import { StockSearch } from "./StockSearch";
 import { Button } from "./ui/button";
@@ -40,7 +40,7 @@ export function Watchlist({ items, current, positions, saving, onSave, onOpen }:
     <section className="panel watchlist-health"><div className="panel-heading"><h2>AI 選股健康度</h2><span className="badge">{({ balanced: "整體尚可", needs_attention: "需要留意", insufficient_data: "資料不足" }[result?.assessment || ""] || "清單總結")}</span></div>
       <div className="watchlist-health-body">
         <p className="panel-footnote">持倉、自選名單有變動，或台北日期換日後自動更新；同一份資料當天沿用結果。AI 不會因此建立委託。</p>
-        {!hasItems ? <p className="empty">加入第一檔股票後，就會開始產生健康摘要。</p> : health.isPending || ["queued", "running"].includes(health.data?.status || "") ? <p role="status"><LoaderCircle size={18} className="spin" /> 正在檢視整份清單與持倉，完成後自動顯示…</p> : health.error || health.data?.error ? <p className="inline-error">{health.error?.message || health.data?.error}</p> : result ? <>
+        {!hasItems ? <p className="empty">加入第一檔股票後，就會開始產生健康摘要。</p> : health.isPending || ["queued", "running"].includes(health.data?.status || "") ? <p role="status"><LoaderCircle size={18} className="spin" /> 正在檢視整份清單與持倉，完成後自動顯示…</p> : health.error || health.data?.error ? <div role="alert"><p className="inline-error">{health.error instanceof ApiError && health.error.status === 404 ? "健康摘要服務尚未更新完成，請稍後重新連線。" : health.error?.message || health.data?.error}</p>{health.error && <Button variant="outline" disabled={health.isFetching} onClick={() => void health.refetch()}>重新連線</Button>}</div> : result ? <>
           <p className="health-summary">{result.summary}</p>
           <div className="health-columns">{[["需要留意", result.risks], ["可以怎麼改善", result.suggestions], ["資料限制", result.limitations]].map(([title, lines]) => <div key={title as string}><h3>{title as string}</h3><ul>{(lines as string[]).map((line,index) => <li key={index}>{line}</li>)}</ul></div>)}</div>
           <p className="panel-footnote">更新時間 {dateLabel(health.data?.created_at)} · 健康度是風險與資料品質檢視，不是獲利機率。</p>
