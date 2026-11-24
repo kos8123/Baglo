@@ -28,13 +28,44 @@ def current_model():
 def configured():
     return bool(os.getenv('BAGLO_GEMINI_API_KEY') or os.getenv('GEMINI_API_KEY') or os.getenv('BAGLO_GEMINI_SECRET_ARN')) if provider()=='gemini' else bool(os.getenv('BAGLO_OPENAI_API_KEY') or os.getenv('BAGLO_OPENAI_SECRET_ARN'))
 
+# BAGLO_AI_ACCOUNTS="*" opens scheduled AI trading to every signed-in account that turns it
+# on; the registry record lists them so the scheduler never scans the whole table.
+AI_REGISTRY='system#ai-accounts'
+
+def open_to_all():
+    return os.getenv('BAGLO_AI_ACCOUNTS','').strip()=='*'
+
+def max_accounts():
+    try:return max(1,int(os.getenv('BAGLO_AI_MAX_ACCOUNTS','20')))
+    except ValueError:return 20
+
+def scheduled_accounts(store):
+    if open_to_all():
+        return list(store.read(AI_REGISTRY).get('ai_accounts',[]))
+    return [a.strip() for a in os.getenv('BAGLO_AI_ACCOUNTS','').split(',') if a.strip()]
+
+def register(store,account,enabled):
+    """Add or remove an account from the open schedule. Raises when the shared quota is full."""
+    if not open_to_all():return
+    def op(state):
+        accounts=list(state.get('ai_accounts',[]))
+        if enabled and account not in accounts:
+            if len(accounts)>=max_accounts():
+                raise DomainError(f'AI 自動交易名額已滿（{max_accounts()} 個帳號），請稍後再試',409)
+            accounts.append(account)
+        elif not enabled and account in accounts:
+            accounts.remove(account)
+        state['ai_accounts']=accounts
+        return state,accounts
+    store.mutate(AI_REGISTRY,op)
+
 def settings(state):
     return state.get('ai_settings', {'enabled':False, 'symbols':['2330'], 'budget':1000000, 'min_confidence':0.7})
 
 def status(state):
     return {'provider':provider(), 'configured':configured(), 'model':current_model(), 'settings':settings(state),
             'jobs':state.get('ai_jobs',[]), 'schedule_configured':bool(os.getenv('BAGLO_LOCAL_SCHEDULE')=='ENABLED' or (os.getenv('BAGLO_AI_WORKER') and os.getenv('BAGLO_AI_SCHEDULE')=='ENABLED' and os.getenv('BAGLO_AI_ACCOUNTS'))),
-            'reason':'需要模型後端金鑰、每日排程與帳戶名單；只有開市且可信即時報價時才可送模擬委託。'}
+            'reason':'需要模型後端金鑰與每日排程；打開開關的帳戶才會被排入（開放模式最多 '+str(max_accounts())+' 個帳戶），只有開市且可信即時報價時才可送模擬委託。'}
 
 def save_settings(state, body):
     if set(body) != {'enabled','symbols','budget','min_confidence'} or type(body['enabled']) is not bool:
@@ -46,6 +77,8 @@ def save_settings(state, body):
         raise DomainError('每筆 AI 模擬預算為 100～300,000 元')
     if type(body['min_confidence']) not in (float,int) or not .5<=body['min_confidence']<=1:
         raise DomainError('最低信心門檻請設定為 50%～100%')
+    if len(symbols)>20:
+        raise DomainError('自動交易最多設定 20 檔股票')
     if body['enabled'] and not configured():
         raise DomainError('尚未設定模型金鑰，無法啟用自動模擬')
     result=deepcopy(state);result['ai_settings']=body;result['auto_enabled']=body['enabled']

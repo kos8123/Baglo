@@ -145,6 +145,8 @@ def handler(event, context):
             save_settings(get_store().read(account),body)
             if len(body['symbols'])>20:raise DomainError('單次自動研究最多 20 檔候選股票')
             for symbol in body['symbols']:get_markets().resolve(symbol)
+            from .ai import register
+            register(get_store(),account,body['enabled'])
             def save_selection(state):
                 changed,result=save_settings(state,body)
                 changed['ai_selection_mode']=True
@@ -172,6 +174,8 @@ def handler(event, context):
             if body['symbols']!=settings(get_store().read(account))['symbols']:
                 for symbol in body['symbols']:
                     get_markets().resolve(symbol)
+            from .ai import register
+            register(get_store(),account,body['enabled'])
             return response(200,get_store().mutate(account,lambda state:save_settings(state,body)))
         if method == 'POST' and path == '/api/ai/jobs':
             from .ai import enqueue

@@ -28,6 +28,7 @@ Baglo是台股AI研究與模擬交易平台。系統只建立虛擬資金、持�
 ### Identity and synchronous API
 
 - Cognito使用OAuth authorization-code flow with PKCE發出JWT。
+- Google登入接受任何email已驗證的Google帳號（`BAGLO_GOOGLE_OPEN_SIGNUP`），讓面試官能直接用自己的帳號登入；不會用email合併既有帳號。
 - API Gateway將公開路由與受保護路由分開。
 - API Lambda處理帳戶、虛擬資金、持倉、委託、自選股、AI設定與研究結果。
 
@@ -48,6 +49,7 @@ EventBridge → Premarket Analysis → Stock Selection → AI Trading Worker
 - Stock Selection驗證資料完整度、評分多檔高流動性股票並呼叫Gemini。
 - AI Trading Worker套用信心、資金、曝險與持倉限制後建立模擬委託。
 - 任一資料、模型或風控步驟失敗時不建立委託，並保存失敗原因。
+- 排程對象：`AiAccounts`可填指定帳號，或填`*`開放給所有登入使用者。開放模式下，使用者打開自動交易開關時才寫入DynamoDB的名單紀錄，排程只讀這份名單，不掃整張表；名額上限預設20個帳號，每個帳號每天每檔只呼叫一次模型，費用有上限。
 
 ### Data, security and operations
 

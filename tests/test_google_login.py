@@ -15,6 +15,17 @@ def test_google_guard_limits_new_and_existing_google_accounts(monkeypatch):
     with pytest.raises(ValueError):handler(allowed,None)
 
 
+def test_open_signup_accepts_any_verified_google_account(monkeypatch):
+    monkeypatch.setenv('BAGLO_GOOGLE_OPEN_SIGNUP','true')
+    monkeypatch.setenv('BAGLO_GOOGLE_ALLOWED_EMAILS','kos8123@gmail.com')
+    def event(email,verified='true'):
+        return {'triggerSource':'PreSignUp_ExternalProvider','request':{'userAttributes':{'email':email,'email_verified':verified,'identities':'[{"providerName":"Google"}]'}}}
+    reviewer=event('reviewer@example.com')
+    assert handler(reviewer,None) is reviewer
+    with pytest.raises(ValueError):handler(event('reviewer@example.com','false'),None)
+    with pytest.raises(ValueError):handler(event(''),None)
+
+
 def test_google_guard_leaves_native_cognito_flow_intact():
     event={'triggerSource':'PreSignUp_AdminCreateUser','request':{'userAttributes':{'email':'native@example.com'}}}
     assert handler(event,None) is event

@@ -1,7 +1,8 @@
-"""Two-phase daily paper AI scheduling. Known accounts only; never scan users."""
+"""Two-phase daily paper AI scheduling for listed or opted-in accounts; never scans users."""
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import os
+import time
 from .domain import DomainError
 
 def handler(event, context):
@@ -9,15 +10,23 @@ def handler(event, context):
     from .ai import enqueue,execute,settings,update_job
     current=datetime.now(ZoneInfo('Asia/Taipei'))
     if current.weekday()>=5:return {'status':'skipped','reason':'weekend'}
-    accounts=[a.strip() for a in os.getenv('BAGLO_AI_ACCOUNTS','').split(',') if a.strip()]
+    from .ai import scheduled_accounts
     store,markets=get_store(),get_markets()
+    accounts=scheduled_accounts(store)
+    started=time.monotonic()
     from .matching import settle
     # Fill or expire pending paper orders on every tick (including after the close),
     # before any new AI order is placed.
-    for account in accounts:settle(store,markets,account,current)
+    # Stop well inside the 180s Lambda timeout; skipped accounts are handled on the next tick.
+    for account in accounts:
+        if time.monotonic()-started>90:break
+        settle(store,markets,account,current)
     if event.get('phase')=='execute' and not (9,5)<=(current.hour,current.minute)<=(13,30):return {'status':'skipped','reason':'outside_execution_window'}
     reports=[]
     for account in accounts:
+        if time.monotonic()-started>140:
+            reports.append({'account':account,'status':'deferred','reason':'time_budget'})
+            continue
         state=store.read(account);policy=settings(state)
         if not policy['enabled']:continue
         if state.get('ai_selection_mode'):

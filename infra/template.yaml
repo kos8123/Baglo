@@ -14,7 +14,7 @@ Parameters:
   ReleaseId: {Type: String, Default: unknown}
   OpenAISecretArn: {Type: String, Default: ''}
   OpenAIModel: {Type: String, Default: gpt-4.1-mini}
-  AiAccounts: {Type: String, Default: '', Description: 'Comma-separated Cognito sub IDs explicitly allowed for daily AI paper trading'}
+  AiAccounts: {Type: String, Default: '', Description: 'Comma-separated Cognito sub IDs for daily AI paper trading, or * for every account that opts in (capped)'}
   FugleSecretArn:
     Type: String
     Default: ''
@@ -207,6 +207,8 @@ Resources:
       Environment:
         Variables:
           BAGLO_GOOGLE_ALLOWED_EMAILS: !Sub '{{resolve:secretsmanager:${GoogleOAuthSecretArn}:SecretString:allowed_emails::${GoogleOAuthSecretVersion}}}'
+          # Reviewers and interviewers sign in with their own Google accounts; the list stays as a fallback.
+          BAGLO_GOOGLE_OPEN_SIGNUP: 'true'
   GoogleGuardPermission:
     Type: AWS::Lambda::Permission
     Condition: HasGoogle
