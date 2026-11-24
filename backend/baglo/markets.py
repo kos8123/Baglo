@@ -1,6 +1,7 @@
 """Public TWSE/TPEx data with explicit provenance; optional Fugle reference quotes.
 
-No snapshot or last trade is ever used to fill an order here.
+This module only fetches prices. Order fills are decided in matching.py from
+1-minute candles and official daily bars, never from a single quote snapshot.
 """
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
@@ -335,6 +336,33 @@ class MarketService:
         except Exception:
             fallback['reason'] = '即時來源暫時不可用；使用最近收盤參考價，並非即時報價'
             return {'instrument': instrument, 'quote': fallback}
+
+    def intraday_candles(self, symbol, market_type='odd_lot'):
+        """Today's Fugle 1-minute candles in cents, or None without a key or data."""
+        if market_type not in ('odd_lot', 'board_lot'):
+            raise DomainError('交易類別不正確')
+        key = self.fugle_key()
+        if not key:
+            return None
+        url = 'https://api.fugle.tw/marketdata/v1.0/stock/intraday/candles/'+symbol+'?timeframe=1'
+        if market_type == 'odd_lot':
+            url += '&type=oddlot'
+        cached = self.cache.get('fugle-candles:'+symbol+':'+market_type, lambda: self.fetcher(url, {'X-API-KEY': key}), ttl=60)
+        data = cached['data']
+        if data.get('symbol') != symbol or not isinstance(data.get('data'), list):
+            raise DataUnavailable('分 K 資料代號不符或格式不正確')
+        bars = []
+        for row in data['data']:
+            prices = {name: cents(row.get(name)) for name in ('open', 'high', 'low', 'close')}
+            try:
+                at = datetime.fromisoformat(str(row.get('date'))).astimezone(TZ)
+            except ValueError:
+                continue
+            if any(v is None for v in prices.values()) or not prices['low'] <= min(prices['open'], prices['close']) <= max(prices['open'], prices['close']) <= prices['high']:
+                continue
+            bars.append({'at': at, **prices})
+        bars.sort(key=lambda b: b['at'])
+        return {'date': str(data.get('date') or (bars[0]['at'].date().isoformat() if bars else '')), 'bars': bars}
 
     def history(self, symbol, months=4, offset_months=0):
         if type(months) is not int or not 1 <= months <= 6 or type(offset_months) is not int or not 0 <= offset_months <= 114:

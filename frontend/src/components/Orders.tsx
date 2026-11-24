@@ -45,6 +45,7 @@ export function Orders({
             ["pending", "待成交"],
             ["filled", "已成交"],
             ["cancelled", "已取消"],
+            ["expired", "已失效"],
           ].map(([value, label]) => (
             <Button
               key={value}
@@ -110,9 +111,20 @@ export function Orders({
                         pending: "待成交",
                         filled: "已成交",
                         cancelled: "已取消",
+                        expired: "已失效",
                       }[order.status]
                     }
                   </span>
+                  {order.status === "filled" && order.fill_price != null && (
+                    <small className="order-detail">
+                      {money(order.fill_price)}
+                      {order.filled_at ? `・${dateLabel(order.filled_at)}` : ""}
+                      {order.fill_source ? `・${{ intraday_1m: "盤中分 K", daily_bar: "收盤日 K", sandbox_limit_price: "本機沙盒" }[order.fill_source]}` : ""}
+                    </small>
+                  )}
+                  {order.status === "expired" && order.expire_reason && (
+                    <small className="order-detail">{order.expire_reason}</small>
+                  )}
                 </td>
                 <td>
                   {order.status === "pending" && (
@@ -145,8 +157,8 @@ export function Orders({
         )}
       </div>
       <p className="panel-footnote">
-        純模擬。委託不自動撮合；本機「沙盒成交」以限價示範，未模擬委託簿、滑價與交割。手續費
-        0.1425%（最低 20 元），股票賣出稅 0.3%。帳本最多 150 筆。
+        純模擬，依真實行情撮合：盤中用 1 分 K 判斷，價格碰到限價就全數成交（不模擬排隊與部分成交）；
+        跨日的委託以官方日 K 判斷。當日有效，收盤未成交即失效並退回保留資金。手續費 0.1425%（最低 20 元），股票賣出稅 0.3%。帳本最多 150 筆。
       </p>
     </>
   );

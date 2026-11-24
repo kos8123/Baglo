@@ -45,11 +45,15 @@ export interface Order {
   market_type?: Venue;
   limit_price: number;
   reserved: number;
-  status: "pending" | "filled" | "cancelled";
+  status: "pending" | "filled" | "cancelled" | "expired";
   created_at: string;
   fee?: number;
   tax?: number;
   fill_price?: number;
+  filled_at?: string;
+  fill_source?: "intraday_1m" | "daily_bar" | "sandbox_limit_price";
+  expired_at?: string;
+  expire_reason?: string;
 }
 export interface Account {
   cash: number;

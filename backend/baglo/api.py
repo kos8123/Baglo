@@ -49,7 +49,7 @@ def handler(event, context):
             'client_id': os.getenv('BAGLO_CLIENT_ID', ''), 'auth_domain': os.getenv('BAGLO_AUTH_DOMAIN', ''),
             'price_ticks': stock_price_ticks(),
             'symbols': [{'symbol': k, 'name': v} for k, v in UNIVERSE.items()],
-            'capabilities': {'manual_orders': True, 'live_quote_matching': False,
+            'capabilities': {'manual_orders': True, 'live_quote_matching': True,
                              'ai_recommendations': __import__('baglo.ai',fromlist=['configured']).configured(), 'ai_auto_trading': os.getenv('BAGLO_AI_SCHEDULE')=='ENABLED', 'ai_paper_workflow': True}})
     try:
         # Read-only market data is intentionally public. Account, research, AI and
@@ -96,8 +96,12 @@ def handler(event, context):
             return response(200, {'symbol': parts[2], 'fundamentals': service.fundamentals(parts[2]), 'ownership': service.ownership(parts[2])})
         if method == 'GET' and path == '/api/portfolio':
             from .portfolio import portfolio
+            from .matching import settle
+            settle(get_store(), get_markets(), account)
             return response(200, portfolio(get_store().read(account), get_markets()))
         if method == 'GET' and path == '/api/account':
+            from .matching import settle
+            settle(get_store(), get_markets(), account)
             return response(200, get_store().read(account))
         if method == 'GET' and path == '/api/watchlist':
             state=get_store().read(account)
