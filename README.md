@@ -8,6 +8,7 @@ Baglo是台股AI研究與模擬交易平台，用於展示Serverless雲端架構
 
 - **網站：** <https://baglo.pages.dev>
 - **API健康檢查：** <https://5ck9jrcbe3.execute-api.us-east-1.amazonaws.com/api/health>
+- **API文件（Swagger UI）：** <https://baglo.pages.dev/docs/>，規格檔為[`/api/openapi.json`](https://5ck9jrcbe3.execute-api.us-east-1.amazonaws.com/api/openapi.json)。公開資料API可以直接在頁面上按「Try it out」試打；帳戶、下單與AI相關API需要Cognito access token。
 - 訪客不用登入就能搜尋股票、查看K線與加入自選股；使用Google帳號登入後，可以模擬下單與開啟AI自動交易。
 
 ## 開發理念
