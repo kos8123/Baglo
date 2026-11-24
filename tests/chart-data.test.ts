@@ -1,0 +1,53 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { aggregate, snap } from "../frontend/src/chart-data.ts";
+const bars = [
+  { date: "2026-10-30", open: 100, high: 120, low: 90, close: 110, volume: 5 },
+  { date: "2026-11-02", open: 115, high: 140, low: 100, close: 135, volume: 7 },
+  { date: "2026-11-03", open: 130, high: 145, low: 95, close: 105, volume: 9 },
+  {
+    date: "2026-11-09",
+    open: 100,
+    high: 110,
+    low: 80,
+    close: 90,
+    volume: null,
+  },
+];
+test("week uses Monday boundaries, first open, extrema, last close and volume sum", () => {
+  const result = aggregate(bars, "week");
+  assert.equal(result.length, 3);
+  assert.deepEqual(result[1], {
+    date: "2026-11-02",
+    open: 115,
+    high: 145,
+    low: 95,
+    close: 105,
+    volume: 16,
+    period_start: "2026-11-02",
+    period_end: "2026-11-03",
+  });
+});
+test("month spans year boundary without manufacturing dates or missing volume", () => {
+  const result = aggregate(bars, "month");
+  assert.equal(result.length, 2);
+  assert.equal(result[1].open, 115);
+  assert.equal(result[1].close, 90);
+  assert.equal(result[1].volume, null);
+  assert.equal(result[1].period_end, "2026-11-09");
+  assert.equal(
+    aggregate(
+      [
+        { ...bars[0], date: "2025-12-31" },
+        { ...bars[1], date: "2026-01-02" },
+      ],
+      "month",
+    ).length,
+    2,
+  );
+});
+test("crosshair always snaps to selected candle close regardless of pointer height", () => {
+  assert.deepEqual(snap(bars, 1), { date: "2026-11-02", price: 135 });
+  assert.equal(snap(bars, 99).price, 90);
+  assert.equal(snap([], 0), null);
+});

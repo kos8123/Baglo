@@ -1,0 +1,174 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Baglo branch-specific AWS CodePipeline, validated artifacts and production approval
+Parameters:
+  Environment: {Type: String, AllowedValues: [dev, prod]}
+  Repository: {Type: String, Default: kos8123/Baglo}
+  ConnectionArn: {Type: String, Description: Existing AVAILABLE GitHub CodeConnections ARN in this region}
+  ArtifactBucket: {Type: String, Description: Artifact bucket output from this environment bootstrap}
+  DeployRoleArn: {Type: String, Description: DeployRoleArn output from updated bootstrap}
+  CloudFormationRoleArn: {Type: String}
+  FugleSecretArn: {Type: String, Default: ''}
+  GeminiSecretArn: {Type: String, Default: ''}
+  GeminiModel: {Type: String, Default: gemini-3.5-flash-lite}
+  OpenAISecretArn: {Type: String, Default: ''}
+  OpenAIModel: {Type: String, Default: gpt-4.1-mini}
+  AiAccounts: {Type: String, Default: ''}
+  AiSchedule: {Type: String, Default: DISABLED, AllowedValues: [ENABLED, DISABLED]}
+  GoogleOAuthSecretArn: {Type: String, Default: '', Description: 'Secret JSON: client_id, client_secret, allowed_emails (comma-separated)'}
+  GoogleOAuthSecretVersion: {Type: String, Default: ''}
+  FrontendUrl: {Type: String, Default: '', Description: Optional Cloudflare Pages or custom frontend origin}
+Conditions:
+  IsProd: !Equals [!Ref Environment, prod]
+Resources:
+  ValidateLog:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/baglo-${Environment}-validate'
+      RetentionInDays: 7
+  ValidateRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: codebuild.amazonaws.com}
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: {aws:SourceAccount: !Ref 'AWS::AccountId'}
+              ArnEquals:
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/baglo-${Environment}-validate'
+      Policies:
+        - PolicyName: validate-artifact-only
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [s3:GetObject, s3:GetObjectVersion, s3:PutObject, s3:GetBucketLocation, s3:ListBucket]
+                Resource: [!Sub 'arn:${AWS::Partition}:s3:::${ArtifactBucket}', !Sub 'arn:${AWS::Partition}:s3:::${ArtifactBucket}/*']
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !GetAtt ValidateLog.Arn
+  Validate:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub 'baglo-${Environment}-validate'
+      ServiceRole: !GetAtt ValidateRole.Arn
+      Source: {Type: CODEPIPELINE, BuildSpec: buildspec.yml}
+      Artifacts: {Type: CODEPIPELINE}
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: 'aws/codebuild/standard:7.0'
+        PrivilegedMode: false
+        EnvironmentVariables:
+          - {Name: BAGLO_FRONTEND_URL, Value: !Ref FrontendUrl}
+      TimeoutInMinutes: 20
+      ConcurrentBuildLimit: 1
+      LogsConfig:
+        CloudWatchLogs: {Status: ENABLED, GroupName: !Ref ValidateLog}
+  Deploy:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub 'baglo-${Environment}-deploy'
+      ServiceRole: !Ref DeployRoleArn
+      Source: {Type: CODEPIPELINE, BuildSpec: buildspec-deploy.yml}
+      Artifacts: {Type: CODEPIPELINE}
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        PrivilegedMode: false
+        EnvironmentVariables:
+          - {Name: AWS_REGION, Value: !Ref 'AWS::Region'}
+          - {Name: BAGLO_ENVIRONMENT, Value: !Ref Environment}
+          - {Name: BAGLO_CFN_ROLE_ARN, Value: !Ref CloudFormationRoleArn}
+          - {Name: BAGLO_ARTIFACT_BUCKET, Value: !Ref ArtifactBucket}
+          - {Name: BAGLO_FUGLE_SECRET_ARN, Value: !Ref FugleSecretArn}
+          - {Name: BAGLO_GEMINI_SECRET_ARN, Value: !Ref GeminiSecretArn}
+          - {Name: BAGLO_GOOGLE_OAUTH_SECRET_ARN, Value: !Ref GoogleOAuthSecretArn}
+          - {Name: BAGLO_GOOGLE_OAUTH_SECRET_VERSION, Value: !Ref GoogleOAuthSecretVersion}
+          - {Name: BAGLO_GEMINI_MODEL, Value: !Ref GeminiModel}
+          - {Name: BAGLO_OPENAI_SECRET_ARN, Value: !Ref OpenAISecretArn}
+          - {Name: BAGLO_OPENAI_MODEL, Value: !Ref OpenAIModel}
+          - {Name: BAGLO_AI_ACCOUNTS, Value: !Ref AiAccounts}
+          - {Name: BAGLO_AI_SCHEDULE, Value: !Ref AiSchedule}
+          - {Name: BAGLO_FRONTEND_URL, Value: !Ref FrontendUrl}
+      TimeoutInMinutes: 30
+      ConcurrentBuildLimit: 1
+      LogsConfig:
+        CloudWatchLogs: {Status: ENABLED, GroupName: !Sub '/aws/codebuild/baglo-${Environment}-deploy'}
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: codepipeline.amazonaws.com}, Action: sts:AssumeRole}]
+      Policies:
+        - PolicyName: own-pipeline-actions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [codeconnections:UseConnection, codestar-connections:UseConnection]
+                Resource: !Ref ConnectionArn
+              - Effect: Allow
+                Action: [s3:GetObject, s3:GetObjectVersion, s3:PutObject, s3:GetBucketVersioning, s3:GetBucketLocation, s3:ListBucket]
+                Resource: [!Sub 'arn:${AWS::Partition}:s3:::${ArtifactBucket}', !Sub 'arn:${AWS::Partition}:s3:::${ArtifactBucket}/*']
+              - Effect: Allow
+                Action: [codebuild:StartBuild, codebuild:BatchGetBuilds]
+                Resource: [!GetAtt Validate.Arn, !GetAtt Deploy.Arn]
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub 'baglo-${Environment}-pipeline'
+      PipelineType: V2
+      ExecutionMode: QUEUED
+      RoleArn: !GetAtt PipelineRole.Arn
+      ArtifactStore: {Type: S3, Location: !Ref ArtifactBucket}
+      Triggers:
+        - ProviderType: CodeStarSourceConnection
+          GitConfiguration:
+            SourceActionName: GitHub
+            Push:
+              - Branches:
+                  Includes: [!If [IsProd, main, dev]]
+                FilePaths:
+                  Includes: ['backend/**', 'infra/**', 'scripts/**', 'requirements*.txt', 'pyproject.toml', 'buildspec*.yml', 'tests/**']
+                  Excludes: ['scripts/cloudflare_build.sh', 'scripts/build_frontend.py', 'scripts/configure_frontend.py', 'tests/*.test.ts']
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GitHub
+              ActionTypeId: {Category: Source, Owner: AWS, Provider: CodeStarSourceConnection, Version: '1'}
+              Configuration:
+                ConnectionArn: !Ref ConnectionArn
+                FullRepositoryId: !Ref Repository
+                BranchName: !If [IsProd, main, dev]
+                DetectChanges: 'false'
+                OutputArtifactFormat: CODE_ZIP
+              OutputArtifacts: [{Name: Source}]
+        - Name: Validate
+          Actions:
+            - Name: ReactPythonIaC
+              ActionTypeId: {Category: Build, Owner: AWS, Provider: CodeBuild, Version: '1'}
+              Configuration: {ProjectName: !Ref Validate}
+              InputArtifacts: [{Name: Source}]
+              OutputArtifacts: [{Name: Validated}]
+        - !If
+          - IsProd
+          - Name: ApproveProduction
+            Actions:
+              - Name: ApproveTestedRevision
+                ActionTypeId: {Category: Approval, Owner: AWS, Provider: Manual, Version: '1'}
+                Configuration: {CustomData: 'Approve the validated main source revision and its immutable frontend artifact.'}
+          - !Ref AWS::NoValue
+        - Name: Deploy
+          Actions:
+            - Name: LambdaS3CloudFront
+              ActionTypeId: {Category: Build, Owner: AWS, Provider: CodeBuild, Version: '1'}
+              Configuration: {ProjectName: !Ref Deploy}
+              InputArtifacts: [{Name: Validated}]
+Outputs:
+  PipelineName: {Value: !Ref Pipeline}
+  ConsoleUrl: {Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/codesuite/codepipeline/pipelines/${Pipeline}/view'}

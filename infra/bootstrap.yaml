@@ -1,0 +1,148 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Baglo CI identity bootstrap - review permissions before applying
+Parameters:
+  Environment: {Type: String, AllowedValues: [dev, prod]}
+  Repository: {Type: String, Default: kos8123/Baglo}
+  ExistingOidcProviderArn: {Type: String, Default: ''}
+  GoogleOAuthSecretArn: {Type: String, Default: ''}
+Conditions:
+  HasGoogleSecret: !Not [!Equals [!Ref GoogleOAuthSecretArn, '']]
+  CreateOidc: !Equals [!Ref ExistingOidcProviderArn, '']
+Resources:
+  GithubOidc:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateOidc
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+  Artifacts:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration: [{ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}}]
+      LifecycleConfiguration:
+        Rules: [{Id: expire-build-artifacts, Status: Enabled, ExpirationInDays: 30}]
+  CloudFormationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: cloudformation.amazonaws.com}, Action: 'sts:AssumeRole'}]
+      Policies:
+        - PolicyName: manage-baglo-resources
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - !If
+                - HasGoogleSecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref GoogleOAuthSecretArn
+                - !Ref AWS::NoValue
+              - Effect: Allow
+                Action: cloudformation:CreateChangeSet
+                Resource: !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31'
+              - Effect: Allow
+                Action: ['lambda:*']
+                Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:baglo-${Environment}-*'
+              - Effect: Allow
+                Action: [dynamodb:CreateTable, dynamodb:DeleteTable, dynamodb:DescribeTable, dynamodb:UpdateTable, dynamodb:TagResource, dynamodb:UntagResource, dynamodb:ListTagsOfResource, dynamodb:DescribeContinuousBackups, dynamodb:UpdateContinuousBackups, dynamodb:DescribeTimeToLive, dynamodb:UpdateTimeToLive]
+                Resource: !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/baglo-${Environment}-*'
+              - Effect: Allow
+                Action: ['s3:*']
+                Resource: [!Sub 'arn:${AWS::Partition}:s3:::baglo-${Environment}-*', !Sub 'arn:${AWS::Partition}:s3:::baglo-${Environment}-*/*']
+              - Effect: Allow
+                Action: [s3:GetObject, s3:GetBucketLocation]
+                Resource: [!GetAtt Artifacts.Arn, !Sub '${Artifacts.Arn}/*']
+              - Effect: Allow
+                Action: logs:DescribeLogGroups
+                Resource: '*'
+              - Effect: Allow
+                Action: ['logs:*']
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/baglo-${Environment}-*'
+              - Effect: Allow
+                Action: [iam:CreateRole, iam:DeleteRole, iam:GetRole, iam:PutRolePolicy, iam:DeleteRolePolicy, iam:GetRolePolicy, iam:ListRolePolicies, iam:ListAttachedRolePolicies, iam:UpdateAssumeRolePolicy, iam:TagRole, iam:UntagRole]
+                Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/baglo-${Environment}-*'
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/baglo-${Environment}-*'
+                Condition:
+                  StringEquals: {iam:PassedToService: [lambda.amazonaws.com, scheduler.amazonaws.com]}
+              - Effect: Allow
+                Action: [apigateway:POST, apigateway:GET, apigateway:DELETE]
+                Resource: !Sub 'arn:${AWS::Partition}:apigateway:${AWS::Region}::/tags/arn%3A${AWS::Partition}%3Aapigateway%3A${AWS::Region}%3A%3A%2Fv2%2Fapis%2F*'
+              - Effect: Allow
+                Action: ['apigateway:*']
+                Resource: !Sub 'arn:${AWS::Partition}:apigateway:${AWS::Region}::/apis*'
+              - Effect: Allow
+                Action: ['cognito-idp:*']
+                Resource: !Sub 'arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*'
+              - Effect: Allow
+                Action: ['scheduler:*']
+                Resource: !Sub 'arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/*'
+              - Effect: Allow
+                Action: ['cloudfront:*']
+                Resource: '*'
+  BuildLog:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/codebuild/baglo-${Environment}-deploy"
+      RetentionInDays: 7
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: codebuild.amazonaws.com}
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: {aws:SourceAccount: !Ref 'AWS::AccountId'}
+              ArnEquals:
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/baglo-${Environment}-deploy'
+          - Effect: Allow
+            Principal:
+              Federated: !If [CreateOidc, !Ref GithubOidc, !Ref ExistingOidcProviderArn]
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub 'repo:${Repository}:environment:${Environment}'
+      Policies:
+        - PolicyName: codebuild-deploy-logs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !GetAtt BuildLog.Arn
+        - PolicyName: deploy-specific-stack
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [cloudformation:CreateChangeSet, cloudformation:DescribeChangeSet, cloudformation:DeleteChangeSet, cloudformation:ExecuteChangeSet, cloudformation:DescribeStacks, cloudformation:DescribeStackEvents, cloudformation:GetTemplate, cloudformation:GetTemplateSummary, cloudformation:ListStackResources]
+                Resource: [!Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/baglo-${Environment}/*', !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31']
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt CloudFormationRole.Arn
+                Condition: {StringEquals: {iam:PassedToService: cloudformation.amazonaws.com}}
+              - Effect: Allow
+                Action: [s3:GetBucketLocation, s3:ListBucket, s3:GetObject, s3:PutObject]
+                Resource: [!GetAtt Artifacts.Arn, !Sub '${Artifacts.Arn}/*', !Sub 'arn:${AWS::Partition}:s3:::baglo-${Environment}-*', !Sub 'arn:${AWS::Partition}:s3:::baglo-${Environment}-*/*']
+              - Effect: Allow
+                Action: [cloudfront:CreateInvalidation, cloudfront:GetInvalidation]
+                Resource: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/*'
+Outputs:
+  DeployRoleArn: {Value: !GetAtt DeployRole.Arn}
+  CloudFormationRoleArn: {Value: !GetAtt CloudFormationRole.Arn}
+  ArtifactBucket: {Value: !Ref Artifacts}
+  OidcProviderArn: {Value: !If [CreateOidc, !Ref GithubOidc, !Ref ExistingOidcProviderArn]}

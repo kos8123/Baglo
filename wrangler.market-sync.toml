@@ -1,0 +1,13 @@
+name = "baglo-market-sync"
+main = "workers/market-sync.js"
+compatibility_date = "2026-11-23"
+
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+BAGLO_API_BASE = "https://5ck9jrcbe3.execute-api.us-east-1.amazonaws.com"
+
+[[r2_buckets]]
+binding = "BAGLO_MARKET_CACHE"
+bucket_name = "baglo-market-cache"

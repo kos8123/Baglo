@@ -29,3 +29,9 @@ data/
 # OS and editor
 .DS_Store
 .idea/
+
+# TypeScript project build cache
+*.tsbuildinfo
+
+release-manifest.json
+market-cache-audit.json

@@ -1,0 +1,753 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Baglo paper-trading foundation - isolated serverless environment
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, prod]
+  PremarketScheduleState:
+    Type: String
+    Default: DISABLED
+    AllowedValues: [ENABLED, DISABLED]
+  GeminiSecretArn: {Type: String, Default: ''}
+  GeminiModel: {Type: String, Default: gemini-3.5-flash-lite}
+  ReleaseId: {Type: String, Default: unknown}
+  OpenAISecretArn: {Type: String, Default: ''}
+  OpenAIModel: {Type: String, Default: gpt-4.1-mini}
+  AiAccounts: {Type: String, Default: '', Description: 'Comma-separated Cognito sub IDs for daily AI paper trading, or * for every account that opts in (capped)'}
+  FugleSecretArn:
+    Type: String
+    Default: ''
+    Description: Optional existing Secrets Manager secret ARN; never the API key itself
+  GoogleOAuthSecretArn: {Type: String, Default: '', Description: 'Secret JSON: client_id, client_secret, allowed_emails (comma-separated)'}
+  GoogleOAuthSecretVersion: {Type: String, Default: ''}
+  FrontendUrl:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^https://[A-Za-z0-9.-]+$'
+    Description: Optional Cloudflare Pages or custom frontend origin without a trailing slash
+Conditions:
+  HasGoogle: !And [!Not [!Equals [!Ref GoogleOAuthSecretArn, '']], !Not [!Equals [!Ref GoogleOAuthSecretVersion, '']]]
+  HasExternalFrontend: !Not [!Equals [!Ref FrontendUrl, '']]
+  HasGeminiSecret: !Not [!Equals [!Ref GeminiSecretArn, '']]
+  HasOpenAISecret: !Not [!Equals [!Ref OpenAISecretArn, '']]
+  HasFugleSecret: !Not [!Equals [!Ref FugleSecretArn, '']]
+Resources:
+  Ledger:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{AttributeName: pk, AttributeType: S}]
+      KeySchema: [{AttributeName: pk, KeyType: HASH}]
+      SSESpecification: {SSEEnabled: true}
+      PointInTimeRecoverySpecification: {PointInTimeRecoveryEnabled: true}
+      Tags: [{Key: Project, Value: Baglo}, {Key: Environment, Value: !Ref Environment}]
+  ResearchBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration: [{ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}}]
+      VersioningConfiguration: {Status: Enabled}
+  WebsiteBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration: [{ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}}]
+      VersioningConfiguration: {Status: Enabled}
+  OriginAccess:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-website'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+  WebHeaders:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${AWS::StackName}-headers'
+        SecurityHeadersConfig:
+          ContentTypeOptions: {Override: true}
+          FrameOptions: {FrameOption: DENY, Override: true}
+          ReferrerPolicy: {ReferrerPolicy: no-referrer, Override: true}
+          StrictTransportSecurity: {AccessControlMaxAgeSec: 31536000, IncludeSubdomains: true, Override: true}
+          ContentSecurityPolicy:
+            Override: true
+            ContentSecurityPolicy: !Sub "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.execute-api.${AWS::Region}.amazonaws.com https://*.auth.${AWS::Region}.amazoncognito.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+  WebsiteCache:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub '${AWS::StackName}-website-no-cache'
+        DefaultTTL: 0
+        MaxTTL: 0
+        MinTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingBrotli: false
+          EnableAcceptEncodingGzip: false
+          CookiesConfig: {CookieBehavior: none}
+          HeadersConfig: {HeaderBehavior: none}
+          QueryStringsConfig: {QueryStringBehavior: none}
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        HttpVersion: http2
+        IPV6Enabled: true
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: website
+            DomainName: !GetAtt WebsiteBucket.RegionalDomainName
+            S3OriginConfig: {OriginAccessIdentity: ''}
+            OriginAccessControlId: !GetAtt OriginAccess.Id
+        DefaultCacheBehavior:
+          TargetOriginId: website
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: !Ref WebsiteCache
+          ResponseHeadersPolicyId: !Ref WebHeaders
+        ViewerCertificate: {CloudFrontDefaultCertificate: true}
+  WebsitePolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebsiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: cloudfront.amazonaws.com}
+            Action: s3:GetObject
+            Resource: !Sub '${WebsiteBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+  Users:
+    Type: AWS::Cognito::UserPool
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      UserPoolName: !Sub '${AWS::StackName}-users'
+      UserPoolTier: ESSENTIALS
+      AdminCreateUserConfig: {AllowAdminCreateUserOnly: false}
+      LambdaConfig: !If
+        - HasGoogle
+        - PreSignUp: !GetAtt GoogleGuard.Arn
+          PreTokenGenerationConfig: {LambdaArn: !GetAtt GoogleGuard.Arn, LambdaVersion: V2_0}
+        - !Ref AWS::NoValue
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      Policies:
+        PasswordPolicy: {MinimumLength: 12, RequireLowercase: true, RequireUppercase: true, RequireNumbers: true, RequireSymbols: true}
+  GoogleProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Condition: HasGoogle
+    Properties:
+      UserPoolId: !Ref Users
+      ProviderName: Google
+      ProviderType: Google
+      ProviderDetails:
+        client_id: !Sub '{{resolve:secretsmanager:${GoogleOAuthSecretArn}:SecretString:client_id::${GoogleOAuthSecretVersion}}}'
+        client_secret: !Sub '{{resolve:secretsmanager:${GoogleOAuthSecretArn}:SecretString:client_secret::${GoogleOAuthSecretVersion}}}'
+        authorize_scopes: openid email profile
+      AttributeMapping: {email: email, email_verified: email_verified}
+  GoogleGuardLog:
+    Type: AWS::Logs::LogGroup
+    Condition: HasGoogle
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-google-guard'
+      RetentionInDays: 7
+  GoogleGuardRole:
+    Type: AWS::IAM::Role
+    Condition: HasGoogle
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}]
+      Policies:
+        - PolicyName: own-auth-logs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !GetAtt GoogleGuardLog.Arn
+  GoogleGuard:
+    Type: AWS::Serverless::Function
+    Condition: HasGoogle
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-google-guard'
+      CodeUri: ../backend/
+      Handler: baglo.google_guard.handler
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 128
+      Timeout: 5
+      Role: !GetAtt GoogleGuardRole.Arn
+      Environment:
+        Variables:
+          BAGLO_GOOGLE_ALLOWED_EMAILS: !Sub '{{resolve:secretsmanager:${GoogleOAuthSecretArn}:SecretString:allowed_emails::${GoogleOAuthSecretVersion}}}'
+          # Reviewers and interviewers sign in with their own Google accounts; the list stays as a fallback.
+          BAGLO_GOOGLE_OPEN_SIGNUP: 'true'
+  GoogleGuardPermission:
+    Type: AWS::Lambda::Permission
+    Condition: HasGoogle
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref GoogleGuard
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt Users.Arn
+      SourceAccount: !Ref AWS::AccountId
+  ApiScopes:
+    Type: AWS::Cognito::UserPoolResourceServer
+    Properties:
+      UserPoolId: !Ref Users
+      Identifier: baglo-api
+      Name: Baglo API
+      Scopes: [{ScopeName: access, ScopeDescription: Access own paper account}]
+  Client:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn: ApiScopes
+    Properties:
+      UserPoolId: !Ref Users
+      ClientName: !Sub '${AWS::StackName}-web'
+      GenerateSecret: false
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows: [code]
+      AllowedOAuthScopes: [openid, baglo-api/access]
+      SupportedIdentityProviders: [COGNITO, !If [HasGoogle, !Ref GoogleProvider, !Ref AWS::NoValue]]
+      CallbackURLs:
+        - !Sub 'https://${Distribution.DomainName}/'
+        - !If [HasExternalFrontend, !Sub '${FrontendUrl}/terminal', !Ref 'AWS::NoValue']
+      LogoutURLs:
+        - !Sub 'https://${Distribution.DomainName}/'
+        - !If [HasExternalFrontend, !Sub '${FrontendUrl}/', !Ref 'AWS::NoValue']
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      AccessTokenValidity: 1
+      TokenValidityUnits: {AccessToken: hours}
+  AuthDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      ManagedLoginVersion: 2
+      UserPoolId: !Ref Users
+      Domain: !Sub 'baglo-${Environment}-${AWS::AccountId}-${AWS::Region}'
+  LoginBranding:
+    Type: AWS::Cognito::ManagedLoginBranding
+    DependsOn: AuthDomain
+    Properties:
+      UserPoolId: !Ref Users
+      ClientId: !Ref Client
+      UseCognitoProvidedValues: false
+      Settings:
+        categories:
+          global:
+            colorSchemeMode: DARK
+            spacingDensity: REGULAR
+            pageHeader:
+              enabled: false
+            pageFooter:
+              enabled: false
+          form:
+            displayGraphics: false
+            languageSelector:
+              enabled: true
+            location:
+              horizontal: CENTER
+              vertical: CENTER
+        componentClasses:
+          buttons:
+            borderRadius: 7.0
+          input:
+            borderRadius: 6.0
+            darkMode:
+              defaults:
+                backgroundColor: 141b22ff
+                borderColor: 35414eff
+              placeholderColor: 8295aaff
+          inputLabel:
+            darkMode:
+              textColor: dce5efff
+          inputDescription:
+            darkMode:
+              textColor: 9bafc5ff
+          focusState:
+            darkMode:
+              borderColor: d2f779ff
+          divider:
+            darkMode:
+              borderColor: 303c49ff
+          link:
+            darkMode:
+              defaults:
+                textColor: d2f779ff
+              hover:
+                textColor: e6ffb0ff
+        components:
+          favicon:
+            enabledTypes: [SVG]
+          pageBackground:
+            darkMode:
+              color: 14191fff
+            image:
+              enabled: false
+          form:
+            borderRadius: 10.0
+            backgroundImage:
+              enabled: false
+            darkMode:
+              backgroundColor: 1b222aff
+              borderColor: 303c49ff
+            logo:
+              enabled: true
+              formInclusion: IN
+              location: START
+              position: TOP
+          pageText:
+            darkMode:
+              bodyColor: dce5efff
+              descriptionColor: 9bafc5ff
+              headingColor: dce5efff
+          primaryButton:
+            darkMode:
+              defaults:
+                backgroundColor: d2f779ff
+                textColor: 172017ff
+              hover:
+                backgroundColor: bfe65eff
+                textColor: 172017ff
+              active:
+                backgroundColor: aed44fff
+                textColor: 172017ff
+              disabled:
+                backgroundColor: 35414eff
+                borderColor: 35414eff
+          secondaryButton:
+            darkMode:
+              defaults:
+                backgroundColor: 1b222aff
+                borderColor: 52683eff
+                textColor: d2f779ff
+              hover:
+                backgroundColor: 25302aff
+                borderColor: d2f779ff
+                textColor: d2f779ff
+          alert:
+            borderRadius: 6.0
+            darkMode:
+              error:
+                backgroundColor: 352526ff
+                borderColor: d7857bff
+      Assets:
+      - Category: FORM_LOGO
+        ColorMode: DARK
+        Extension: SVG
+        Bytes: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNDAiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCAyNDAgNjQiPjxyZWN0IHg9IjAiIHk9IjgiIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgcng9IjExIiBmaWxsPSIjZDJmNzc5Ii8+PHRleHQgeD0iMTAiIHk9IjQ1IiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI3MDAiIGZvbnQtc2l6ZT0iMzkiIGZpbGw9IiMxNzIwMTciPmIuPC90ZXh0Pjx0ZXh0IHg9IjY0IiB5PSI0NSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iNzAwIiBmb250LXNpemU9IjQxIiBsZXR0ZXItc3BhY2luZz0iLTIiIGZpbGw9IiNkY2U1ZWYiPkJhZ2xvPC90ZXh0Pjwvc3ZnPgo=
+      - Category: FAVICON_SVG
+        ColorMode: DYNAMIC
+        Extension: SVG
+        Bytes: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iMTAiIGZpbGw9IiNkMmY3NzkiLz48dGV4dCB4PSI5IiB5PSIzNyIgZm9udC1mYW1pbHk9IkFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI3MDAiIGZvbnQtc2l6ZT0iMzgiIGZpbGw9IiMxNzIwMTciPmIuPC90ZXh0Pjwvc3ZnPgo=
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: '$default'
+      CorsConfiguration:
+        AllowOrigins:
+          - !Sub 'https://${Distribution.DomainName}'
+          - !If [HasExternalFrontend, !Ref FrontendUrl, !Ref 'AWS::NoValue']
+        AllowMethods: [GET, POST, PUT, OPTIONS]
+        AllowHeaders: [Authorization, Content-Type, Idempotency-Key]
+        MaxAge: 300
+      DefaultRouteSettings: {ThrottlingBurstLimit: 10, ThrottlingRateLimit: 5}
+      Auth:
+        DefaultAuthorizer: Cognito
+        Authorizers:
+          Cognito:
+            AuthorizationScopes: [baglo-api/access]
+            IdentitySource: '$request.header.Authorization'
+            JwtConfiguration:
+              issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${Users}'
+              audience: [!Ref Client]
+  ApiRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: 'sts:AssumeRole'}]
+      Policies:
+        - PolicyName: dispatch-ai
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: [!Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ai', !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-selection']
+        - PolicyName: own-ledger-and-logs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem]
+                Resource: !GetAtt Ledger.Arn
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: !Sub '${ResearchBucket.Arn}/market/*'
+              - !If
+                - HasFugleSecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref FugleSecretArn
+                - !Ref AWS::NoValue
+              - !If
+                - HasGeminiSecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref GeminiSecretArn
+                - !Ref AWS::NoValue
+              - !If
+                - HasOpenAISecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref OpenAISecretArn
+                - !Ref AWS::NoValue
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !GetAtt ApiLog.Arn
+  ApiLog:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-api'
+      RetentionInDays: 7
+  Api:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-api'
+      CodeUri: ../backend/
+      Handler: baglo.api.handler
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 512
+      Timeout: 25
+      Role: !GetAtt ApiRole.Arn
+      Environment:
+        Variables:
+          BAGLO_TABLE: !Ref Ledger
+          BAGLO_DATA_BUCKET: !Ref ResearchBucket
+          BAGLO_FUGLE_SECRET_ARN: !Ref FugleSecretArn
+          BAGLO_ENV: !Ref Environment
+          BAGLO_DEMO: '0'
+          BAGLO_AI_PROVIDER: gemini
+          BAGLO_GEMINI_SECRET_ARN: !Ref GeminiSecretArn
+          BAGLO_GEMINI_MODEL: !Ref GeminiModel
+          BAGLO_RELEASE_ID: !Ref ReleaseId
+          BAGLO_SELECTION_WORKER: !Sub '${AWS::StackName}-selection'
+          BAGLO_OPENAI_SECRET_ARN: !Ref OpenAISecretArn
+          BAGLO_OPENAI_MODEL: !Ref OpenAIModel
+          BAGLO_AI_WORKER: !Ref AiWorker
+          BAGLO_AI_SCHEDULE: !Ref PremarketScheduleState
+          BAGLO_AI_ACCOUNTS: !Ref AiAccounts
+          BAGLO_CLIENT_ID: !Ref Client
+          BAGLO_AUTH_DOMAIN: !Sub 'https://${AuthDomain}.auth.${AWS::Region}.amazoncognito.com'
+      Events:
+        AllApi:
+          Type: HttpApi
+          Properties: {ApiId: !Ref HttpApi, Path: '/api/{proxy+}', Method: ANY, PayloadFormatVersion: '2.0'}
+        PublicPreflight:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/{proxy+}
+            Method: OPTIONS
+            PayloadFormatVersion: '2.0'
+            Auth: {Authorizer: NONE}
+        PublicHealth:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/health
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth: {Authorizer: NONE}
+        PublicOpenAPI:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/openapi.json
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth: {Authorizer: NONE}
+        PublicConfig:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/config
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth: {Authorizer: NONE}
+        PublicInstruments:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/instruments
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth: {Authorizer: NONE}
+        PublicInstrumentExport:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/instruments/export
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth: {Authorizer: NONE}
+        PublicMarket:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/market/{symbol}
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth: {Authorizer: NONE}
+        PublicMarketToday:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/market/{symbol}/today
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth: {Authorizer: NONE}
+        PublicHistory:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/history/{symbol}
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth: {Authorizer: NONE}
+  PremarketLog:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-premarket'
+      RetentionInDays: 7
+  PremarketRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: 'sts:AssumeRole'}]
+      Policies:
+        - PolicyName: ai-paper-ledger
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem]
+                Resource: !GetAtt Ledger.Arn
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: !Sub '${ResearchBucket.Arn}/market/*'
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: [!GetAtt AiWorker.Arn, !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-selection']
+              - !If
+                - HasFugleSecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref FugleSecretArn
+                - !Ref AWS::NoValue
+        - PolicyName: premarket-audit
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub '${ResearchBucket.Arn}/premarket/*'
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !GetAtt PremarketLog.Arn
+  Premarket:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-premarket'
+      CodeUri: ../backend/
+      Handler: baglo.jobs.handler
+      Runtime: python3.12
+      Architectures: [arm64]
+      Timeout: 180
+      MemorySize: 256
+      Role: !GetAtt PremarketRole.Arn
+      Environment:
+        Variables:
+          BAGLO_DATA_BUCKET: !Ref ResearchBucket
+          BAGLO_TABLE: !Ref Ledger
+          BAGLO_DEMO: '0'
+          BAGLO_FUGLE_SECRET_ARN: !Ref FugleSecretArn
+          BAGLO_AI_PROVIDER: gemini
+          BAGLO_GEMINI_SECRET_ARN: !Ref GeminiSecretArn
+          BAGLO_GEMINI_MODEL: !Ref GeminiModel
+          BAGLO_RELEASE_ID: !Ref ReleaseId
+          BAGLO_SELECTION_WORKER: !Sub '${AWS::StackName}-selection'
+          BAGLO_OPENAI_SECRET_ARN: !Ref OpenAISecretArn
+          BAGLO_AI_WORKER: !Ref AiWorker
+          BAGLO_AI_ACCOUNTS: !Ref AiAccounts
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: scheduler.amazonaws.com}
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: {aws:SourceAccount: !Ref 'AWS::AccountId'}
+      Policies:
+        - PolicyName: invoke-premarket
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement: [{Effect: Allow, Action: 'lambda:InvokeFunction', Resource: !GetAtt Premarket.Arn}]
+  PremarketSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Description: Prepare daily AI paper research for opted-in configured accounts
+      ScheduleExpression: 'cron(30 8 ? * MON-FRI *)'
+      ScheduleExpressionTimezone: Asia/Taipei
+      State: !Ref PremarketScheduleState
+      FlexibleTimeWindow: {Mode: 'OFF'}
+      Target:
+        Arn: !GetAtt Premarket.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"phase":"analyze"}'
+        RetryPolicy: {MaximumEventAgeInSeconds: 300, MaximumRetryAttempts: 1}
+  AiWorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: 'sts:AssumeRole'}]
+      Policies:
+        - PolicyName: ai-research-only
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-selection'
+              - Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem]
+                Resource: !GetAtt Ledger.Arn
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: !Sub '${ResearchBucket.Arn}/market/*'
+              - !If
+                - HasGeminiSecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref GeminiSecretArn
+                - !Ref AWS::NoValue
+              - !If
+                - HasOpenAISecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref OpenAISecretArn
+                - !Ref AWS::NoValue
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: [!GetAtt AiWorkerLog.Arn, !GetAtt SelectionWorkerLog.Arn]
+  AiWorkerLog:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-ai'
+      RetentionInDays: 7
+  AiWorker:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-ai'
+      CodeUri: ../backend/
+      Handler: baglo.ai.worker
+      EventInvokeConfig: {MaximumRetryAttempts: 0, MaximumEventAgeInSeconds: 3600}
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 512
+      Timeout: 180
+      Role: !GetAtt AiWorkerRole.Arn
+      Environment:
+        Variables:
+          BAGLO_TABLE: !Ref Ledger
+          BAGLO_DATA_BUCKET: !Ref ResearchBucket
+          BAGLO_AI_PROVIDER: gemini
+          BAGLO_GEMINI_SECRET_ARN: !Ref GeminiSecretArn
+          BAGLO_GEMINI_MODEL: !Ref GeminiModel
+          BAGLO_RELEASE_ID: !Ref ReleaseId
+          BAGLO_SELECTION_WORKER: !Sub '${AWS::StackName}-selection'
+          BAGLO_OPENAI_SECRET_ARN: !Ref OpenAISecretArn
+          BAGLO_OPENAI_MODEL: !Ref OpenAIModel
+          BAGLO_DEMO: '0'
+  SelectionWorkerLog:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-selection'
+      RetentionInDays: 7
+  SelectionWorker:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-selection'
+      CodeUri: ../backend/
+      Handler: baglo.selection_research.worker
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 512
+      Timeout: 900
+      Role: !GetAtt AiWorkerRole.Arn
+      EventInvokeConfig: {MaximumRetryAttempts: 0, MaximumEventAgeInSeconds: 3600}
+      Environment:
+        Variables:
+          BAGLO_TABLE: !Ref Ledger
+          BAGLO_DATA_BUCKET: !Ref ResearchBucket
+          BAGLO_AI_PROVIDER: gemini
+          BAGLO_GEMINI_SECRET_ARN: !Ref GeminiSecretArn
+          BAGLO_GEMINI_MODEL: !Ref GeminiModel
+          BAGLO_SELECTION_WORKER: !Sub '${AWS::StackName}-selection'
+          BAGLO_DEMO: '0'
+  AiExecutionSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Description: Submit opted-in AI paper orders after fresh quotes and risk validation
+      ScheduleExpression: 'cron(5/5 9-13 ? * MON-FRI *)'
+      ScheduleExpressionTimezone: Asia/Taipei
+      State: !Ref PremarketScheduleState
+      FlexibleTimeWindow: {Mode: 'OFF'}
+      Target:
+        Arn: !GetAtt Premarket.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"phase":"execute"}'
+        RetryPolicy: {MaximumEventAgeInSeconds: 300, MaximumRetryAttempts: 1}
+Outputs:
+  WebsiteUrl: {Value: !Sub 'https://${Distribution.DomainName}'}
+  WebsiteBucket: {Value: !Ref WebsiteBucket}
+  DistributionId: {Value: !Ref Distribution}
+  ApiUrl: {Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'}
+  UserPoolId: {Value: !Ref Users}
+  DataBucket: {Value: !Ref ResearchBucket}
+  LedgerTable: {Value: !Ref Ledger}
+  ReleaseId: {Value: !Ref ReleaseId}
