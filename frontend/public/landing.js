@@ -26,7 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
       t2t: "Google sign-in only recognizes you", t2: "We use only openid, email and profile. We never read Gmail or Drive, sell your data or use it for ads.",
       t3t: "AI only reads public market data", t3: "Gemini writes text analysis only. Your account data never goes to the AI or into training.",
       readPrivacy: "Read the Privacy Policy", closing: "Test your next idea with a strategy.",
-      privacy: "Privacy Policy", terms: "Terms of Service", contact: "Contact", opening: "Opening the platform…"
+      privacy: "Privacy Policy", terms: "Terms of Service", apiDocs: "API docs", contact: "Contact", opening: "Opening the platform…"
     },
     "zh-CN": {
       navFlow: "运作流程", navTrust: "数据与隐私", enter: "进入平台",
@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
       t2t: "Google 登录只用来识别你", t2: "只用 openid、email、profile，不读取 Gmail 或云端硬盘，也不拿去卖或打广告。",
       t3t: "AI 只看公开行情", t3: "Gemini 只写文字分析。你的账户数据不会交给 AI，也不会拿去训练。",
       readPrivacy: "阅读隐私政策", closing: "用策略，验证你的下一个想法。",
-      privacy: "隐私政策", terms: "服务条款", contact: "联系我们", opening: "正在进入平台…"
+      privacy: "隐私政策", terms: "服务条款", apiDocs: "API 文档", contact: "联系我们", opening: "正在进入平台…"
     },
     ja: {
       navFlow: "仕組み", navTrust: "データとプライバシー", enter: "プラットフォームへ",
@@ -64,7 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
       t2t: "Google ログインは本人確認のみ", t2: "openid・email・profile だけを使います。Gmail やドライブは読まず、販売や広告にも使いません。",
       t3t: "AI は公開の相場データだけを見る", t3: "Gemini はテキスト分析のみを行います。アカウント情報を AI に渡したり、学習に使ったりしません。",
       readPrivacy: "プライバシーポリシーを読む", closing: "次のアイデアを、戦略で確かめよう。",
-      privacy: "プライバシーポリシー", terms: "利用規約", contact: "お問い合わせ", opening: "プラットフォームを開いています…"
+      privacy: "プライバシーポリシー", terms: "利用規約", apiDocs: "API ドキュメント", contact: "お問い合わせ", opening: "プラットフォームを開いています…"
     },
     ko: {
       navFlow: "작동 방식", navTrust: "데이터와 개인정보", enter: "플랫폼 입장",
@@ -83,7 +83,7 @@ document.addEventListener("DOMContentLoaded", () => {
       t2t: "Google 로그인은 본인 확인용", t2: "openid, email, profile만 사용합니다. Gmail이나 드라이브를 읽지 않고, 판매하거나 광고에 쓰지 않습니다.",
       t3t: "AI는 공개 시세만 봅니다", t3: "Gemini는 텍스트 분석만 작성합니다. 계정 정보는 AI에 전달되거나 학습에 쓰이지 않습니다.",
       readPrivacy: "개인정보처리방침 읽기", closing: "다음 아이디어를 전략으로 검증해 보세요.",
-      privacy: "개인정보처리방침", terms: "서비스 약관", contact: "문의하기", opening: "플랫폼을 여는 중…"
+      privacy: "개인정보처리방침", terms: "서비스 약관", apiDocs: "API 문서", contact: "문의하기", opening: "플랫폼을 여는 중…"
     },
   };
   const nodes = [...document.querySelectorAll("[data-i18n]")];
