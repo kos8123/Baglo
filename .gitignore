@@ -34,3 +34,4 @@ data/
 *.tsbuildinfo
 
 release-manifest.json
+market-cache-audit.json

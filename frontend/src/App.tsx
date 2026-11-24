@@ -45,6 +45,27 @@ import { Research } from "./components/Research";
 import { Watchlist } from "./components/Watchlist";
 import { htmlLang, readLanguage, tr, type Language } from "./language";
 import { LanguageMenu } from "./components/LanguageMenu";
+const SELECTED_KEY = "baglo_selected_stock";
+const GUEST_WATCHLIST_KEY = "baglo_guest_watchlist";
+function readGuestWatchlist(): Instrument[] | null {
+  try {
+    const saved = JSON.parse(localStorage.getItem(GUEST_WATCHLIST_KEY) || "null");
+    if (!Array.isArray(saved)) return null;
+    return saved
+      .filter(item => item && /^[1-8]\d{3}$/.test(item.symbol) && typeof item.name === "string")
+      .map(item => ({ symbol: item.symbol, name: item.name, exchange: typeof item.exchange === "string" ? item.exchange : undefined }));
+  } catch { return null; }
+}
+// Reopen the stock the user last looked at; prices are refreshed by the reference query.
+function readSelected(): Instrument | null {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SELECTED_KEY) || "null");
+    if (saved && /^[1-8]\d{3}$/.test(saved.symbol) && typeof saved.name === "string")
+      return { symbol: saved.symbol, name: saved.name, exchange: typeof saved.exchange === "string" ? saved.exchange : undefined };
+  } catch { /* unreadable or blocked storage */ }
+  return null;
+}
+
 export default function App() {
   const init = useQuery({
     queryKey: ["bootstrap"],
@@ -81,7 +102,7 @@ function Terminal({ config }: { config: Config }) {
   const [authorized, setAuthorized] = useState(
       config.environment === "local" || !!sessionStorage.getItem("baglo_token"),
     ),
-    [selected, setSelected] = useState<Instrument>(config.symbols[0]),
+    [selected, setSelected] = useState<Instrument>(() => readSelected() || config.symbols[0]),
     [view, setView] = useState(() => {
       const hash = location.hash.slice(1);
       const value = ["ai", "backtest"].includes(hash) ? "automation" : hash;
@@ -179,16 +200,32 @@ function Terminal({ config }: { config: Config }) {
     queryFn: ({ signal }) => api<{ items: Instrument[]; symbols: string[] }>("/watchlist", { signal }),
     enabled: authorized,
   });
+  // Guests keep their own watchlist in this browser; signing in switches to the saved account list.
+  const [guestList, setGuestList] = useState<Instrument[]>(() => readGuestWatchlist() || config.symbols);
   const publicPrices = useQuery({
-    queryKey: ["public-reference-prices"],
-    queryFn: ({ signal }) => api<{ items: Instrument[] }>("/instruments", { signal }),
+    queryKey: ["public-reference-prices", guestList.map(item => item.symbol).join(",")],
+    queryFn: async ({ signal }) => {
+      const base = await api<{ items: Instrument[] }>("/instruments", { signal });
+      const known = new Set(base.items.map(item => item.symbol));
+      const extra = await Promise.all(guestList.filter(item => !known.has(item.symbol)).map(item =>
+        api<{ items: Instrument[] }>("/instruments?q=" + item.symbol, { signal }).then(r => r.items.filter(i => i.symbol === item.symbol), () => [])));
+      return { items: [...base.items, ...extra.flat()] };
+    },
+    placeholderData: previous => previous,
     enabled: !authorized,
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
   });
+  const saveGuestList = (items: Instrument[]) => {
+    const next = items.slice(-30);
+    setGuestList(next);
+    try {
+      localStorage.setItem(GUEST_WATCHLIST_KEY, JSON.stringify(next.map(({ symbol, name, exchange }) => ({ symbol, name, exchange }))));
+    } catch { /* private mode: keep it for this visit only */ }
+  };
   const savedInstruments = authorized
     ? watchlist.data?.items || config.symbols
-    : config.symbols.map((item) => ({
+    : guestList.map((item) => ({
         ...item,
         ...publicPrices.data?.items.find((quote) => quote.symbol === item.symbol),
       }));
@@ -242,6 +279,9 @@ function Terminal({ config }: { config: Config }) {
   const watchItems = savedInstruments;
   const select = (item: Instrument) => {
     setSelected(item);
+    try {
+      localStorage.setItem(SELECTED_KEY, JSON.stringify({ symbol: item.symbol, name: item.name, exchange: item.exchange }));
+    } catch { /* private mode: remember only for this visit */ }
     setDirty(false);
   };
   const remember = (items: Instrument[]) => {
@@ -249,16 +289,17 @@ function Terminal({ config }: { config: Config }) {
     if (items.every((item) => map.has(item.symbol))) return;
     for (const item of items) map.set(item.symbol, { ...map.get(item.symbol), ...item });
     const next = [...map.values()].slice(-30);
+    if (!authorized) return saveGuestList(next);
     setPicked(next);
     saveWatchlist.mutate(next);
   };
   const toggleCurrentWatch = () => {
-    if (!authorized) return void beginLogin();
-    if (saveWatchlist.isPending) return;
+    if (authorized && saveWatchlist.isPending) return;
     const exists = savedInstruments.some((item) => item.symbol === current.symbol);
     const next = exists
       ? savedInstruments.filter((item) => item.symbol !== current.symbol)
       : [...savedInstruments, current];
+    if (!authorized) return saveGuestList(next);
     setPicked(next);
     saveWatchlist.mutate(next);
   };
@@ -529,7 +570,7 @@ function Terminal({ config }: { config: Config }) {
                   {!watchItems.length && <p className="empty">尚無自選股，請先搜尋股票後加入。</p>}
                 </div>
                 <div className="watchlist-note">
-                  <span>{authorized ? "與「我的自選股」同步，點選股票切換 K 線與下單標的。" : "登入後可保存自己的自選股。"} 價格為收盤參考。</span>
+                  <span>{authorized ? "與「我的自選股」同步，點選股票切換 K 線與下單標的。" : "自選股先存在這個瀏覽器，登入後改用帳戶的清單。"} 價格為收盤參考。</span>
                   {authorized && <Button variant="ghost" size="sm" onClick={() => chooseView("watchlist")}>管理自選股</Button>}
                 </div>
               </details>

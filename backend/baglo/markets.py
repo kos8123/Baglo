@@ -413,7 +413,8 @@ class MarketService:
                     table = next((t for t in payload.get('tables', []) if t.get('data') and '日 期' in t.get('fields', [])), None)
                     if not table:
                         raise DataUnavailable('上櫃歷史月份資料尚未提供')
-                    mapping = {'日期': '日期', '開盤': '開盤價', '最高': '最高價', '最低': '最低價', '收盤': '收盤價', '成交張數': '成交股數'}
+                    # TPEx labels volume 成交仟股 before 2025 and 成交張數 after; both are thousands of shares.
+                    mapping = {'日期': '日期', '開盤': '開盤價', '最高': '最高價', '最低': '最低價', '收盤': '收盤價', '成交張數': '成交股數', '成交仟股': '成交股數'}
                     fields = [mapping.get(re.sub(r'\s+', '', f), re.sub(r'\s+', '', f)) for f in table['fields']]
                     volume_index = fields.index('成交股數')
                     rows = []

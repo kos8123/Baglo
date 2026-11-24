@@ -255,6 +255,18 @@ def test_otc_history_lots_convert_to_shares(service,monkeypatch):
     assert data['bars'][0]['close']==44000
 
 
+def test_otc_history_before_2025_uses_thousand_share_label(service,monkeypatch):
+    old=service.fetcher
+    def fetch(url,headers=None):
+        if 'tradingStock?' not in url:return old(url,headers)
+        return {'stat':'ok','code':'6488','tables':[{'fields':['日 期','成交仟股','成交仟元','開盤','最高','最低','收盤','漲跌','筆數'],
+            'data':[['113/12/02','3,352','954,950','282.00','287.00','279.50','286.00','5.00','2,946']]}]}
+    service.fetcher=fetch
+    data=service.history('6488',months=1,offset_months=23)
+    assert not any('暫無資料' in w for w in data['warnings'])
+    assert data['bars'][0]['date']=='2024-12-02' and data['bars'][0]['volume']==3352000
+
+
 def test_otc_ownership_normalizes_whitespace_in_official_fields(service):
     old=service.fetcher
     def fetch(url,headers=None):
