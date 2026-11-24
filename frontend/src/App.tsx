@@ -174,6 +174,15 @@ function Terminal({ config }: { config: Config }) {
       notify(error instanceof Error ? error.message : "無法開啟登入", true);
     }
   };
+  // Pressing Back on the sign-in page restores this page from the back/forward cache with
+  // the transition still showing; clear it so the terminal is usable again.
+  useEffect(() => {
+    const restore = (event: PageTransitionEvent) => {
+      if (event.persisted) setSigningIn(false);
+    };
+    window.addEventListener("pageshow", restore);
+    return () => window.removeEventListener("pageshow", restore);
+  }, []);
   useEffect(() => {
     if (!authorized && view !== "trade") setView("trade");
   }, [authorized, view]);
