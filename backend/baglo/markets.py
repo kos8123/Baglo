@@ -337,6 +337,31 @@ class MarketService:
             fallback['reason'] = '即時來源暫時不可用；使用最近收盤參考價，並非即時報價'
             return {'instrument': instrument, 'quote': fallback}
 
+    def session_bar(self, symbol):
+        """Today's board-lot daily bar built from the Fugle quote, so charts can show
+        the session before the official daily file is published. None without data."""
+        self.resolve(symbol)
+        key = self.fugle_key()
+        if not key:
+            return None
+        url = 'https://api.fugle.tw/marketdata/v1.0/stock/intraday/quote/'+symbol
+        cached = self.cache.get('fugle:'+symbol+':board_lot', lambda: self.fetcher(url, {'X-API-KEY': key}), ttl=30)
+        data = cached['data']
+        if data.get('symbol') != symbol:
+            raise DataUnavailable('報價代號不符')
+        prices = {'open': cents(data.get('openPrice')), 'high': cents(data.get('highPrice')),
+                  'low': cents(data.get('lowPrice')), 'close': cents(data.get('closePrice') or data.get('lastPrice'))}
+        if any(v is None for v in prices.values()) or not prices['low'] <= min(prices['open'], prices['close']) <= max(prices['open'], prices['close']) <= prices['high']:
+            return None
+        day = iso_date(data.get('date'))
+        if not day:
+            return None
+        volume = number((data.get('total') or {}).get('tradeVolume'))
+        return {'date': day, **prices,
+                # Fugle reports board-lot volume in lots; daily history uses shares.
+                'volume': int(volume*1000) if volume is not None and volume >= 0 else None,
+                'final': bool(data.get('isClose')), 'source': 'Fugle', 'fetched_at': cached['fetched_at']}
+
     def intraday_candles(self, symbol, market_type='odd_lot'):
         """Today's Fugle 1-minute candles in cents, or None without a key or data."""
         if market_type not in ('odd_lot', 'board_lot'):

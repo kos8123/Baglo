@@ -526,6 +526,14 @@ Resources:
             Method: GET
             PayloadFormatVersion: '2.0'
             Auth: {Authorizer: NONE}
+        PublicMarketToday:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/market/{symbol}/today
+            Method: GET
+            PayloadFormatVersion: '2.0'
+            Auth: {Authorizer: NONE}
         PublicHistory:
           Type: HttpApi
           Properties:

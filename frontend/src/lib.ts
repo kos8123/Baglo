@@ -233,3 +233,11 @@ export function initialize() {
     throw e;
   }));
 }
+
+/** Weekday 09:00–13:35 in Taipei: the window when today's candle keeps changing. */
+export function inTradingSession(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Taipei", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
+  const get = (type: string) => parts.find(p => p.type === type)?.value || "";
+  const minutes = Number(get("hour")) * 60 + Number(get("minute"));
+  return !["Sat", "Sun"].includes(get("weekday")) && minutes >= 9 * 60 && minutes <= 13 * 60 + 35;
+}

@@ -25,9 +25,10 @@ import {
   EyeOff,
   Star,
 } from "lucide-react";
-import { api, dateLabel, initialize, login, logout, marketApi, money, pct } from "./lib";
+import { api, dateLabel, inTradingSession, initialize, login, logout, marketApi, money, pct } from "./lib";
 import type {
   Account,
+  Bar,
   Config,
   History,
   Instrument,
@@ -274,12 +275,28 @@ function Terminal({ config }: { config: Config }) {
     staleTime: 6 * 3600000,
     gcTime: 30 * 60000,
   });
+  // The official daily file only appears after the close, so during the session the
+  // chart adds today's candle built from the live board-lot quote.
+  const sessionBar = useQuery({
+    queryKey: ["session-bar", current.symbol],
+    queryFn: ({ signal }) => api<{ bar: (Bar & { final: boolean }) | null }>("/market/" + current.symbol + "/today", { signal }),
+    staleTime: 25_000,
+    refetchInterval: () => (inTradingSession() ? 30_000 : false),
+    retry: false,
+  });
   const bars = useMemo(() => {
-    const map = new Map();
+    const map = new Map<string, Bar>();
     for (const page of history.data?.pages || [])
       for (const bar of page.bars) map.set(bar.date, bar);
-    return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
-  }, [history.data]);
+    const sorted = [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+    const live = sessionBar.data?.bar;
+    if (live && history.data && (!sorted.length || live.date > sorted.at(-1)!.date)) {
+      const { date, open, high, low, close, volume } = live;
+      sorted.push({ date, open, high, low, close, volume });
+    }
+    return sorted;
+  }, [history.data, sessionBar.data]);
+  const liveCandle = !!sessionBar.data?.bar && bars.at(-1)?.date === sessionBar.data.bar.date;
   // A newer completed daily bar may be available before the quote catalog refreshes.
   const taipei = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const lastCompletedBar = bars.filter(bar => bar.date < taipei).at(-1);
@@ -524,6 +541,7 @@ function Terminal({ config }: { config: Config }) {
                     </h2>
                     <span className="badge">
                       {history.data?.pages[0].source || "官方資料"} · OHLCV
+                      {liveCandle && (sessionBar.data?.bar?.final ? " · 今日收盤" : " · 今日盤中")}
                     </span>
                   </div>
                   <PriceChart

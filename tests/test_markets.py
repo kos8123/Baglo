@@ -123,6 +123,35 @@ def test_stale_or_closed_fugle_trade_not_marked_live(service,monkeypatch):
     quote=service.quote('2330','odd_lot')['quote']
     assert quote['kind']=='last_trade' and not quote['is_realtime']
 
+def test_session_bar_builds_today_candle_from_board_lot_quote(service,monkeypatch):
+    monkeypatch.setenv('BAGLO_FUGLE_API_KEY','fake-test-key')
+    old=service.fetcher
+    urls=[]
+    def fetch(url,headers=None):
+        if 'api.fugle.tw' not in url:return old(url,headers)
+        urls.append(url)
+        return {'symbol':'2330','date':'2026-11-20','openPrice':2010,'highPrice':2050,'lowPrice':1995,
+                'closePrice':2040,'lastPrice':2040,'isClose':None,'total':{'tradeVolume':12105}}
+    service.fetcher=fetch
+    bar=service.session_bar('2330')
+    assert bar['date']=='2026-11-20' and (bar['open'],bar['high'],bar['low'],bar['close'])==(201000,205000,199500,204000)
+    assert bar['volume']==12_105_000 and not bar['final']
+    assert 'oddlot' not in urls[0]
+    monkeypatch.setattr(api,'_markets',service)
+    event={'requestContext':{'http':{'method':'GET'}},'rawPath':'/api/market/2330/today'}
+    result=api.handler(event,None)
+    assert result['statusCode']==200 and json.loads(result['body'])['bar']['close']==204000
+
+def test_session_bar_is_null_without_key_or_on_bad_data(service,monkeypatch):
+    monkeypatch.delenv('BAGLO_FUGLE_API_KEY',raising=False)
+    monkeypatch.delenv('BAGLO_FUGLE_SECRET_ARN',raising=False)
+    assert service.session_bar('2330') is None
+    monkeypatch.setenv('BAGLO_FUGLE_API_KEY','fake-test-key')
+    old=service.fetcher
+    service.fetcher=lambda url,headers=None: old(url,headers) if 'api.fugle.tw' not in url else {
+        'symbol':'2330','date':'2026-11-20','openPrice':None,'highPrice':2050,'lowPrice':1995,'closePrice':2040}
+    assert service.session_bar('2330') is None
+
 def test_history_skips_future_and_never_invents_missing_months(service,monkeypatch):
     old=service.fetcher
     def fetch(url,headers=None):

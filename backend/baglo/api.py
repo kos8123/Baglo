@@ -74,6 +74,15 @@ def handler(event, context):
         if method == 'GET' and len(parts) == 3 and parts[:2] == ['api', 'market']:
             params = event.get('queryStringParameters') or {}
             return response(200, get_markets().quote(parts[2], params.get('market_type', 'odd_lot')))
+        if method == 'GET' and len(parts) == 4 and parts[:2] == ['api', 'market'] and parts[3] == 'today':
+            try:
+                bar = get_markets().session_bar(parts[2])
+            except DomainError:
+                raise
+            except Exception:
+                logging.warning('session bar unavailable for %s', parts[2])
+                bar = None
+            return response(200, {'symbol': parts[2], 'bar': bar})
         if method == 'GET' and len(parts) == 3 and parts[:2] == ['api', 'history']:
             params = event.get('queryStringParameters') or {}
             try:
