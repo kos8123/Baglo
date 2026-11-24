@@ -2,6 +2,9 @@ const BACKFILL_SCAN_SIZE = 10;
 const REFRESH_BATCH_SIZE = 40;
 const TARGET_MONTHS = 120;
 const ORDER_VERSION = 2;
+// Version 2: TPEx months before 2025 (labelled 成交仟股) were dropped by the parser.
+// Stored TPEx histories older than this are backfilled again; TWSE ones are only re-tagged.
+const HISTORY_VERSION = "2";
 const CATALOG_SOURCES = [
   "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL",
   "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes",
@@ -107,20 +110,61 @@ async function backfillSymbol(origin, bucket, symbol, savedAt) {
     parts.push(...await Promise.all(offsets.slice(index, index + 5)
       .map((offset) => fetchHistory(origin, symbol, 6, offset))));
   }
+  // Official sources sometimes refuse a burst of requests; retry chunks with missing
+  // months once, one at a time. Months still missing are usually before the listing date.
+  for (let index = 0; index < parts.length; index += 1) {
+    if (!(parts[index]?.warnings || []).some((warning) => warning.includes("暫無資料"))) continue;
+    try {
+      parts[index] = await fetchHistory(origin, symbol, 6, offsets[index]);
+    } catch {
+      // Keep the first result; the daily refresh and next repair pass can fill it later.
+    }
+  }
   await bucket.put(`history/v1/${symbol}/full.json`, JSON.stringify(mergeHistory(parts)), {
     httpMetadata: { contentType: "application/json; charset=utf-8" },
-    customMetadata: { savedAt, months: String(TARGET_MONTHS) },
+    customMetadata: { savedAt, months: String(TARGET_MONTHS), version: HISTORY_VERSION },
   });
 }
 
 async function refreshSymbol(origin, bucket, symbol, savedAt) {
   const current = await fetchHistory(origin, symbol, 1, 0);
-  const stored = await readJson(bucket, `history/v1/${symbol}/full.json`, null);
+  const object = await bucket.get(`history/v1/${symbol}/full.json`);
+  const stored = object ? await object.json() : null;
   const merged = mergeHistory(stored ? [stored, current] : [current]);
   await bucket.put(`history/v1/${symbol}/full.json`, JSON.stringify(merged), {
     httpMetadata: { contentType: "application/json; charset=utf-8" },
-    customMetadata: { savedAt, months: String(stored ? TARGET_MONTHS : 1) },
+    // Keep the stored version so a refresh never marks an unrepaired history as repaired.
+    customMetadata: { savedAt, months: String(stored ? TARGET_MONTHS : 1), version: object?.customMetadata?.version || "" },
   });
+}
+
+// Repairs histories saved before HISTORY_VERSION, one TPEx symbol per run, alongside the
+// daily refresh so recent bars keep updating while old months are filled in.
+async function repairNext(origin, bucket, catalog, state) {
+  if (state.repairVersion === HISTORY_VERSION && state.repairDone) return state;
+  let cursor = state.repairVersion === HISTORY_VERSION ? state.repairCursor || 0 : 0;
+  const staleBefore = new Date(Date.now() - 14 * 86400_000).toISOString().slice(0, 10);
+  const stop = Math.min(catalog.items.length, cursor + BACKFILL_SCAN_SIZE);
+  while (cursor < stop) {
+    const { symbol } = catalog.items[cursor++];
+    const key = `history/v1/${symbol}/full.json`;
+    const object = await bucket.get(key);
+    if (object?.customMetadata?.version === HISTORY_VERSION) continue;
+    const savedAt = String(Date.now());
+    const stored = object ? await object.json() : null;
+    // Refetch everything for missing files, TPEx (parser bug) and histories whose last
+    // bar is weeks old (missed refreshes leave a gap a one-month refresh never closes).
+    if (!stored || stored.source === "TPEx" || !stored.as_of || stored.as_of < staleBefore) {
+      await backfillSymbol(origin, bucket, symbol, savedAt);
+      break;
+    }
+    await bucket.put(key, JSON.stringify(stored), {
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+      customMetadata: { ...object.customMetadata, version: HISTORY_VERSION },
+    });
+  }
+  const done = cursor >= catalog.items.length;
+  return { ...state, repairVersion: HISTORY_VERSION, repairCursor: done ? 0 : cursor, repairDone: done };
 }
 
 async function sync(env) {
@@ -134,8 +178,6 @@ async function sync(env) {
   if (state.targetMonths !== TARGET_MONTHS || state.orderVersion !== ORDER_VERSION) {
     state = { cursor: 0, completedDay: "", phase: "backfill", targetMonths: TARGET_MONTHS, orderVersion: ORDER_VERSION };
   }
-  if (state.completedDay === today) return;
-
   let catalog = await readJson(bucket, "sync/catalog.json", null);
   // The exchange catalog changes rarely and is already persisted in R2.
   // Do not refetch it whenever a pass starts: TPEx rejects some Cloudflare
@@ -147,6 +189,15 @@ async function sync(env) {
     });
   }
   catalog.items = orderCatalog(catalog.items);
+
+  if (state.phase === "refresh") {
+    const repaired = await repairNext(origin, bucket, catalog, state);
+    if (repaired !== state) {
+      state = repaired;
+      await bucket.put("sync/state.json", JSON.stringify(state), { httpMetadata: { contentType: "application/json" } });
+    }
+  }
+  if (state.completedDay === today) return;
 
   let items;
   let next;
@@ -178,6 +229,9 @@ async function sync(env) {
     phase: complete && state.phase === "backfill" ? "refresh" : state.phase,
     targetMonths: TARGET_MONTHS,
     orderVersion: ORDER_VERSION,
+    repairVersion: state.repairVersion,
+    repairCursor: state.repairCursor,
+    repairDone: state.repairDone,
     total: catalog.items.length,
     updatedAt: new Date().toISOString(),
   }), { httpMetadata: { contentType: "application/json" } });
