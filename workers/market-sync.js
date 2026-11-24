@@ -138,30 +138,36 @@ async function refreshSymbol(origin, bucket, symbol, savedAt) {
   });
 }
 
-// Repairs histories saved before HISTORY_VERSION, one TPEx symbol per run, alongside the
-// daily refresh so recent bars keep updating while old months are filled in.
+// True when a symbol's stored history must be fetched again: no file, TPEx saved before
+// HISTORY_VERSION (parser bug), or a last bar weeks old (a gap a one-month refresh never
+// closes). Healthy TWSE files from before the version are only re-tagged.
+async function needsBackfill(bucket, symbol) {
+  const key = `history/v1/${symbol}/full.json`;
+  const object = await bucket.get(key);
+  if (!object) return true;
+  if (object.customMetadata?.version === HISTORY_VERSION) return false;
+  const stored = await object.json();
+  const staleBefore = new Date(Date.now() - 14 * 86400_000).toISOString().slice(0, 10);
+  if (stored.source === "TPEx" || !stored.as_of || stored.as_of < staleBefore) return true;
+  await bucket.put(key, JSON.stringify(stored), {
+    httpMetadata: { contentType: "application/json; charset=utf-8" },
+    customMetadata: { ...object.customMetadata, version: HISTORY_VERSION },
+  });
+  return false;
+}
+
+// During the refresh phase, repairs histories saved before HISTORY_VERSION one symbol per
+// run, so recent bars keep updating while old months are filled in.
 async function repairNext(origin, bucket, catalog, state) {
   if (state.repairVersion === HISTORY_VERSION && state.repairDone) return state;
   let cursor = state.repairVersion === HISTORY_VERSION ? state.repairCursor || 0 : 0;
-  const staleBefore = new Date(Date.now() - 14 * 86400_000).toISOString().slice(0, 10);
   const stop = Math.min(catalog.items.length, cursor + BACKFILL_SCAN_SIZE);
   while (cursor < stop) {
     const { symbol } = catalog.items[cursor++];
-    const key = `history/v1/${symbol}/full.json`;
-    const object = await bucket.get(key);
-    if (object?.customMetadata?.version === HISTORY_VERSION) continue;
-    const savedAt = String(Date.now());
-    const stored = object ? await object.json() : null;
-    // Refetch everything for missing files, TPEx (parser bug) and histories whose last
-    // bar is weeks old (missed refreshes leave a gap a one-month refresh never closes).
-    if (!stored || stored.source === "TPEx" || !stored.as_of || stored.as_of < staleBefore) {
-      await backfillSymbol(origin, bucket, symbol, savedAt);
+    if (await needsBackfill(bucket, symbol)) {
+      await backfillSymbol(origin, bucket, symbol, String(Date.now()));
       break;
     }
-    await bucket.put(key, JSON.stringify(stored), {
-      httpMetadata: { contentType: "application/json; charset=utf-8" },
-      customMetadata: { ...object.customMetadata, version: HISTORY_VERSION },
-    });
   }
   const done = cursor >= catalog.items.length;
   return { ...state, repairVersion: HISTORY_VERSION, repairCursor: done ? 0 : cursor, repairDone: done };
@@ -207,8 +213,7 @@ async function sync(env) {
     const stop = Math.min(catalog.items.length, state.cursor + BACKFILL_SCAN_SIZE);
     while (next < stop) {
       const candidate = catalog.items[next++];
-      const existing = await bucket.head(`history/v1/${candidate.symbol}/full.json`);
-      if (existing?.customMetadata?.months === String(TARGET_MONTHS)) continue;
+      if (!await needsBackfill(bucket, candidate.symbol)) continue;
       items.push(candidate);
       break;
     }
