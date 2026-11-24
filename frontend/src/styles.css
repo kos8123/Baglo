@@ -2326,7 +2326,7 @@ footer {
 .baglo-login-animation text { font-family: Arial, sans-serif; font-size: 104px; font-weight: 700; fill: #d2fa77; }
 .baglo-letter-b { animation: baglo-b-in 400ms ease-out both; }
 .baglo-travel-dot { fill: #d2fa77; animation: baglo-dot-run 1200ms cubic-bezier(.4,0,.2,1) 350ms both; }
-.baglo-drawn-o { fill: none; stroke: #d2fa77; stroke-width: 11; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; transform: rotate(90deg); transform-origin: 282px 72px; animation: baglo-o-draw 600ms ease-in-out 1100ms both; }
+.baglo-drawn-o { fill: none; stroke: #d2fa77; stroke-width: 13; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; transform: rotate(90deg); transform-box: fill-box; transform-origin: center; animation: baglo-o-draw 600ms ease-in-out 1100ms both; }
 .baglo-letter { opacity: 0; animation: baglo-letters-in 400ms ease-out both; }
 .baglo-letter-a { animation-delay: 1600ms; }
 .baglo-letter-g { animation-delay: 1750ms; }
@@ -2334,7 +2334,7 @@ footer {
 .baglo-candle-letter line { stroke: #d2fa77; stroke-width: 3; stroke-linecap: round; }
 .baglo-candle-letter rect { fill: #d2fa77; }
 @keyframes baglo-b-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes baglo-dot-run { 0% { opacity: 0; transform: translateX(0); } 12% { opacity: 1; } 75% { opacity: 1; transform: translate(204px, 8px); } 100% { opacity: 0; transform: translate(204px, 8px); } }
+@keyframes baglo-dot-run { 0% { opacity: 0; transform: translateX(0); } 12% { opacity: 1; } 75% { opacity: 1; transform: translate(181px, 8px); } 100% { opacity: 0; transform: translate(181px, 8px); } }
 @keyframes baglo-o-draw { to { stroke-dashoffset: 0; } }
 @keyframes baglo-letters-in { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
 @media (prefers-reduced-motion: reduce) {
@@ -2459,12 +2459,17 @@ footer {
   .ai-job header time { margin-left: 0; width: 100%; }
 }
 
-/* Language slide switch (shared look with the public homepage). */
-.lang-switch { position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; align-items: center; width: 88px; height: 34px; padding: 3px; border: 1px solid var(--border); border-radius: 999px; background: #161c23; color: var(--muted); font-size: 14px; font-weight: 600; }
-.lang-opt { position: relative; z-index: 1; text-align: center; transition: color .25s; }
-.lang-knob { position: absolute; top: 3px; left: 3px; width: 40px; height: 26px; border-radius: 999px; background: var(--accent); transition: transform .25s cubic-bezier(.3,.7,.3,1); }
-.lang-switch[aria-checked="false"] .lang-opt:nth-child(2), .lang-switch[aria-checked="true"] .lang-opt:nth-child(3) { color: #172012; }
-.lang-switch[aria-checked="true"] .lang-knob { transform: translateX(40px); }
+/* Language menu: globe button with a dropdown of supported languages. */
+.lang-menu { position: relative; }
+.lang-button { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: #161c23; color: #dce4ee; font-size: 14px; font-weight: 600; }
+.lang-button svg { color: var(--accent); }
+.lang-button:hover, .lang-button[aria-expanded="true"] { border-color: #4d5b6d; background: #1f2730; }
+.lang-list { position: absolute; left: 0; top: calc(100% + 8px); z-index: 60; min-width: 170px; margin: 0; padding: 6px; list-style: none; border: 1px solid var(--border); border-radius: 12px; background: #1c2229; box-shadow: 0 12px 32px #0009; }
+.lang-list button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 0; border-radius: 8px; background: none; color: #dce4ee; font-size: 15px; text-align: left; }
+.lang-list button:hover, .lang-list button:focus-visible { background: #2a323c; outline: none; }
+.lang-list button[aria-checked="true"] { color: var(--accent); }
+.lang-button { white-space: nowrap; }
+@media (max-width: 540px) { .lang-button > span { display: none; } .lang-button { width: 34px; padding: 0; justify-content: center; } }
 /* The collapsible watchlist bar owns row 1 at every width; keep chart and ticket below it. */
 @media (max-width: 1200px) { .terminal-grid .center-column, .terminal-grid .order-ticket { grid-row: 2; } }
 @media (max-width: 700px) { .terminal-grid .center-column, .terminal-grid .order-ticket { grid-row: auto; grid-column: 1; } }
@@ -2490,3 +2495,6 @@ footer {
 .price-range-label { margin-right: 4px; }
 .price-range-sep { color: #556374; }
 .price-range-unit { margin-left: 2px; }
+.order-status.expired { color: var(--muted); }
+.order-detail { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; white-space: normal; }
+td:has(> .order-status) { min-width: 230px; }

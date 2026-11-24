@@ -42,7 +42,8 @@ import { Portfolio } from "./components/Portfolio";
 import { AutoTrading } from "./components/AutoTrading";
 import { Research } from "./components/Research";
 import { Watchlist } from "./components/Watchlist";
-import { readLanguage, tr, type Language } from "./language";
+import { htmlLang, readLanguage, tr, type Language } from "./language";
+import { LanguageMenu } from "./components/LanguageMenu";
 export default function App() {
   const init = useQuery({
     queryKey: ["bootstrap"],
@@ -67,12 +68,12 @@ export default function App() {
 }
 function Terminal({ config }: { config: Config }) {
   const [language, setLanguage] = useState<Language>(readLanguage);
-  const changeLanguage = () => {
-    const next = language === "en" ? "zh-TW" : "en";
-    localStorage.setItem("baglo_language", next);
-    document.documentElement.lang = next;
+  const changeLanguage = (next: Language) => {
+    try { localStorage.setItem("baglo_language", next); } catch { /* private mode: keep it for this visit only */ }
+    document.documentElement.lang = htmlLang(next);
     setLanguage(next);
   };
+  useEffect(() => { document.documentElement.lang = htmlLang(language); }, []);
   const queryClient = useQueryClient();
   const fetching = useIsFetching();
   const mutating = useIsMutating();
@@ -343,7 +344,7 @@ function Terminal({ config }: { config: Config }) {
           <div className="wordmark">
             Baglo<span className="product-name">{tr("交易終端", language)}</span>
           </div>
-          <button type="button" role="switch" aria-checked={language === "en"} className="lang-switch" onClick={changeLanguage} aria-label="Switch language / 切換語言"><span className="lang-knob" aria-hidden="true" /><span className="lang-opt">中</span><span className="lang-opt">EN</span></button>
+          <LanguageMenu language={language} onChange={changeLanguage} />
           <div className="connection">
             <i />
             {config.demo
@@ -419,7 +420,7 @@ function Terminal({ config }: { config: Config }) {
             <span>
               {config.demo
                 ? "純模擬帳戶・真實行情參考・沙盒成交僅依委託限價示範"
-                : "純模擬帳戶・委託不自動撮合"}
+                : "純模擬帳戶・依真實行情盤中撮合"}
               <b> AI 設定與執行紀錄請至左側專區</b>
             </span>
           </div>
@@ -684,16 +685,16 @@ function Terminal({ config }: { config: Config }) {
         )}
         {signingIn && (
           <div className="login-transition" role="status" aria-live="polite">
-            <svg className="baglo-login-animation" viewBox="0 0 340 130" aria-hidden="true">
+            <svg className="baglo-login-animation" viewBox="4 0 288 130" aria-hidden="true">
               <text className="baglo-letter-b" x="10" y="98">b</text>
               <text className="baglo-letter baglo-letter-a" x="78" y="98">a</text>
               <text className="baglo-letter baglo-letter-g" x="140" y="98">g</text>
               <g className="baglo-letter baglo-letter-l baglo-candle-letter">
-                <line x1="221" y1="21" x2="221" y2="108" />
-                <rect x="214" y="37" width="14" height="61" rx="2" />
+                <line x1="217" y1="21" x2="217" y2="106" />
+                <rect x="210" y="37" width="14" height="61" rx="2" />
               </g>
               <circle className="baglo-travel-dot" cx="78" cy="90" r="7" />
-              <circle className="baglo-drawn-o" cx="282" cy="72" r="26" pathLength="1" />
+              <circle className="baglo-drawn-o" cx="259" cy="71.5" r="20.5" pathLength="1" />
             </svg>
             <strong>正在開啟安全登入</strong>
             <span>登入後才會啟用個人交易與 AI 功能</span>
