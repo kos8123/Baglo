@@ -98,8 +98,9 @@ def handler(event, context):
             from .backtest import read
             return response(200,read(account,path.rsplit('/',1)[-1]))
         if method == 'GET' and path == '/api/ai':
-            from .ai import status
-            return response(200,status(get_store().read(account)))
+            from .ai import ensure_registered,status
+            state=get_store().read(account)
+            return response(200,{**status(state),'scheduled':ensure_registered(get_store(),account,state)})
         if method == 'GET' and len(parts) == 3 and parts[:2] == ['api', 'research']:
             service = get_markets()
             return response(200, {'symbol': parts[2], 'fundamentals': service.fundamentals(parts[2]), 'ownership': service.ownership(parts[2])})
@@ -135,8 +136,10 @@ def handler(event, context):
             from .backtest import read
             from .selection_research import public
             state=get_store().read(account)
+            from .ai import ensure_registered
             job=public(read(account,state['ai_selection_job'])) if state.get('ai_selection_job') else None
-            return response(200,{'job':job,'selection_mode':state.get('ai_selection_mode',False)})
+            return response(200,{'job':job,'selection_mode':state.get('ai_selection_mode',False),
+                                 'scheduled':ensure_registered(get_store(),account,state)})
         if method == 'POST' and path == '/api/ai/automation/research':
             from .selection_research import start,public
             return response(202,public(start(get_store(),get_markets(),account)))

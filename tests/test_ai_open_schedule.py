@@ -37,3 +37,23 @@ def test_open_schedule_is_capped(store, monkeypatch):
     register(store, 'bob', False)
     register(store, 'carol', True)
     assert scheduled_accounts(store) == ['alice', 'carol']
+
+
+def test_enabled_account_missing_from_registry_is_added_back(store, monkeypatch):
+    from baglo.ai import ensure_registered
+    monkeypatch.setenv('BAGLO_AI_ACCOUNTS', '*')
+    enabled = {'ai_settings': {'enabled': True, 'symbols': ['2330'], 'budget': 1000000, 'min_confidence': 0.7}}
+    assert ensure_registered(store, 'alice', enabled) is True
+    assert scheduled_accounts(store) == ['alice']
+    assert ensure_registered(store, 'bob', {}) is False
+    assert scheduled_accounts(store) == ['alice']
+
+
+def test_ensure_registered_reports_a_full_quota(store, monkeypatch):
+    from baglo.ai import ensure_registered
+    monkeypatch.setenv('BAGLO_AI_ACCOUNTS', '*')
+    monkeypatch.setenv('BAGLO_AI_MAX_ACCOUNTS', '1')
+    enabled = {'ai_settings': {'enabled': True, 'symbols': ['2330'], 'budget': 1000000, 'min_confidence': 0.7}}
+    register(store, 'alice', True)
+    assert ensure_registered(store, 'bob', enabled) is False
+    assert scheduled_accounts(store) == ['alice']

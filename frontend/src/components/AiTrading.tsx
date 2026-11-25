@@ -28,6 +28,7 @@ interface Status {
   settings: Settings;
   jobs: Job[];
   schedule_configured: boolean;
+  scheduled?: boolean;
   reason: string;
 }
 export function AiTrading({
@@ -118,8 +119,9 @@ export function AiTrading({
       tone: s?.configured ? "good" : "warn", note: s?.configured ? s.model : "需要設定 Gemini 金鑰" },
     { icon: CalendarClock, label: "每日排程", value: status.isPending ? "讀取中" : s?.schedule_configured ? "已就緒" : "未啟動",
       tone: s?.schedule_configured ? "good" : "neutral", note: s?.schedule_configured ? "平日 08:30 自動開始" : "目前只能手動分析" },
-    { icon: Bot, label: "自動委託", value: s?.settings.enabled ? "已啟用" : "已關閉",
-      tone: s?.settings.enabled ? "good" : "neutral", note: `每筆預算 ${money(policy.budget)}` },
+    { icon: Bot, label: "自動委託", value: s?.settings.enabled ? (s.scheduled === false ? "未排入" : "已啟用") : "已關閉",
+      tone: s?.settings.enabled ? (s.scheduled === false ? "warn" : "good") : "neutral",
+      note: s?.settings.enabled && s.scheduled === false ? "名額已滿，排程不會執行此帳戶" : `每筆預算 ${money(policy.budget)}` },
   ];
   const confidence = Math.round(policy.min_confidence * 100);
   const actionLabel: Record<string, string> = { buy: "買進", sell: "賣出", hold: "觀望" };
