@@ -4,6 +4,7 @@ import {
   useIsFetching,
   useIsMutating,
   useMutation,
+  useQueries,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -232,12 +233,29 @@ function Terminal({ config }: { config: Config }) {
       localStorage.setItem(GUEST_WATCHLIST_KEY, JSON.stringify(next.map(({ symbol, name, exchange }) => ({ symbol, name, exchange }))));
     } catch { /* private mode: keep it for this visit only */ }
   };
-  const savedInstruments = authorized
+  const listedInstruments = authorized
     ? watchlist.data?.items || config.symbols
     : guestList.map((item) => ({
         ...item,
         ...publicPrices.data?.items.find((quote) => quote.symbol === item.symbol),
       }));
+  // The exchange catalog publishes a day's close the next day; today's Fugle candle keeps
+  // watchlist prices current (shares the header's session-bar cache).
+  const todayBars = useQueries({
+    queries: listedInstruments.slice(0, 30).map((item) => ({
+      queryKey: ["session-bar", item.symbol],
+      queryFn: ({ signal }: { signal: AbortSignal }) => api<{ bar: (Bar & { final: boolean }) | null }>("/market/" + item.symbol + "/today", { signal }),
+      staleTime: 25_000,
+      refetchInterval: () => (inTradingSession() ? 30_000 : false),
+      retry: false,
+    })),
+  });
+  const savedInstruments = listedInstruments.map((item, index) => {
+    const bar = todayBars[index]?.data?.bar;
+    return bar && (!item.as_of || bar.date > item.as_of)
+      ? { ...item, price: bar.close, as_of: bar.date, source: "Fugle" }
+      : item;
+  });
   const saveWatchlist = useMutation({
     mutationFn: (items: Instrument[]) =>
       api<{ symbols: string[] }>("/watchlist", {
