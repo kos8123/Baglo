@@ -21,7 +21,23 @@ interface Job {
   execution_note?: string;
   order_id?: string;
   auto_execute?: boolean;
+  kind?: string;
+  parent?: string;
+  summary?: string;
+  candidates?: string[];
+  picks?: Pick[];
   result?: { action: string; confidence: number; reason: string; risk: string };
+}
+interface Pick {
+  symbol: string;
+  name?: string;
+  action: string;
+  confidence: number;
+  reason: string;
+  order_id?: string;
+  quantity?: number;
+  limit_price?: number;
+  note?: string;
 }
 interface Status {
   configured: boolean;
@@ -39,7 +55,6 @@ export function AiTrading({
   pipeline,
   research,
   results,
-  current,
 }: {
   pipeline?: ReactNode;
   research?: ReactNode;
@@ -70,24 +85,21 @@ export function AiTrading({
           : false,
   });
   const [changed, setChanged] = useState(false);
-  const [tradeSymbol, setTradeSymbol] = useState(current.symbol);
-  useEffect(() => setTradeSymbol(current.symbol), [current.symbol]);
   const tradeNow = useMutation({
-    mutationFn: (symbol: string) =>
-      api<Job>("/ai/trade-now", { method: "POST", body: JSON.stringify({ symbol }) }),
-    onSuccess: (job) => {
+    mutationFn: () => api<Job>("/ai/pick-and-trade", { method: "POST", body: "{}" }),
+    onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["ai"] });
-      notify(`Gemini 開始分析 ${job.symbol}，完成後會依建議直接建立模擬委託`);
+      notify("Gemini 開始選股，完成後會直接建立模擬委託");
     },
     onError: (e: Error) => notify(e.message, true),
   });
-  const latestTrade = status.data?.jobs.filter((job) => job.auto_execute).at(-1);
+  const latestTrade = status.data?.jobs.filter((job) => job.kind === "pick").at(-1);
   const tradeRunning = !!latestTrade && ["queued", "running"].includes(latestTrade.status);
   const [seenTrade, setSeenTrade] = useState<string | undefined>();
   useEffect(() => {
-    if (!latestTrade || latestTrade.id === seenTrade || !latestTrade.execution_note) return;
+    if (!latestTrade || latestTrade.id === seenTrade || latestTrade.status !== "completed") return;
     setSeenTrade(latestTrade.id);
-    if (latestTrade.order_id) {
+    if (latestTrade.picks?.some((pick) => pick.order_id)) {
       void client.invalidateQueries({ queryKey: ["account"] });
       void client.invalidateQueries({ queryKey: ["portfolio"] });
     }
@@ -162,27 +174,44 @@ export function AiTrading({
       </div>
       {status.error && <div className="inline-error">{status.error.message}</div>}
       <section className="panel trade-now">
-        <div className="panel-heading"><h2><Zap size={16} /> AI 立即交易</h2><span className="badge">隨時可測試</span></div>
+        <div className="panel-heading"><h2><Zap size={16} /> AI 一鍵選股交易</h2><span className="badge">隨時可測試</span></div>
         <p className="panel-footnote">
-          讓 Gemini 現在分析一檔股票，信心達到門檻（目前 {confidence}%）就直接用虛擬資金建立模擬委託。
-          盤中以即時價下單；非交易時段以最近參考價掛限價單，下一個交易日依真實行情撮合。觀望或信心不足就不下單。每帳戶每天最多 10 次。
+          按一下，Gemini 會從全市場成交金額最大的 10 檔股票（含你的持股）比較近期價量與均線，選出最多 3 檔要買進或賣出的股票，
+          信心達到門檻（目前 {confidence}%）的就直接用虛擬資金建立模擬委託。盤中以即時價下單；非交易時段以最近參考價掛限價單，下一個交易日依真實行情撮合。每帳戶每天最多 10 次。
         </p>
-        <form className="trade-now-form" onSubmit={(e) => { e.preventDefault(); if (/^[1-8]\d{3}$/.test(tradeSymbol)) tradeNow.mutate(tradeSymbol); else notify("請輸入四位數上市櫃股票代號", true); }}>
-          <label className="field">股票代號
-            <input inputMode="numeric" maxLength={4} value={tradeSymbol} onChange={(e) => setTradeSymbol(e.target.value.trim())} />
-          </label>
-          <Button type="submit" disabled={!enabled || tradeNow.isPending || tradeRunning}>
-            {tradeNow.isPending ? "送出中…" : tradeRunning ? "Gemini 分析中…" : "讓 Gemini 分析並下單"}
+        <div className="trade-now-form">
+          <Button disabled={!enabled || tradeNow.isPending || tradeRunning} onClick={() => tradeNow.mutate()}>
+            {tradeNow.isPending ? "送出中…" : tradeRunning ? "Gemini 選股中…" : "讓 Gemini 選股並下單"}
           </Button>
-        </form>
-        {!enabled && <p className="muted">登入後即可使用。</p>}
+          {!enabled && <span className="muted">登入後即可使用。</span>}
+        </div>
         {latestTrade && (
           <div className="trade-now-result" role="status">
-            <strong>{latestTrade.symbol}</strong>
-            <span className={`pill ${latestTrade.status}`}>{statusLabel[latestTrade.status] || latestTrade.status}</span>
-            {latestTrade.result && <span className={`pill action-${latestTrade.result.action}`}>{actionLabel[latestTrade.result.action]} {(latestTrade.result.confidence * 100).toFixed(0)}%</span>}
-            <p>{latestTrade.error || latestTrade.execution_note || (tradeRunning ? "Gemini 正在讀取技術面、基本面與籌碼面資料並分析，約需 10～60 秒。" : "")}</p>
-            {latestTrade.order_id && <p className="ai-order">已建立模擬委託，可到「委託紀錄」查看。</p>}
+            <header>
+              <span className={`pill ${latestTrade.status}`}>{statusLabel[latestTrade.status] || latestTrade.status}</span>
+              <time>{dateLabel(latestTrade.created_at)}</time>
+            </header>
+            <p>{latestTrade.error || latestTrade.execution_note || (tradeRunning ? "Gemini 正在讀取候選股的價量資料並比較，約需 20～60 秒。" : "")}</p>
+            {latestTrade.summary && <p className="muted">{latestTrade.summary}</p>}
+            {!!latestTrade.picks?.length && (
+              <ul className="trade-now-picks">
+                {latestTrade.picks.map((pick) => (
+                  <li key={pick.symbol}>
+                    <div>
+                      <strong>{pick.symbol} {pick.name}</strong>
+                      <span className={`pill action-${pick.action}`}>{actionLabel[pick.action]} {(pick.confidence * 100).toFixed(0)}%</span>
+                    </div>
+                    <p>{pick.reason}</p>
+                    <p className={pick.order_id ? "ai-order" : "muted"}>
+                      {pick.order_id && pick.quantity && pick.limit_price
+                        ? `已建立模擬委託：${actionLabel[pick.action]} ${pick.quantity} 股，限價 ${money(pick.limit_price)}。${pick.note || ""}`
+                        : pick.note}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {latestTrade.picks?.some((pick) => pick.order_id) && <p className="ai-order">可到「委託紀錄」查看。</p>}
           </div>
         )}
       </section>

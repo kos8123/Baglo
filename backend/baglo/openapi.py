@@ -48,6 +48,7 @@ def document():
       '/api/ai/automation/research':{'post':op('以已儲存候選池非同步產生 AI 策略並回測選股，每檔可能消耗一次模型額度',code='202')},
       '/api/ai/automation/settings':{'put':op('儲存最多20檔候選池，切換為先回測選股再模擬委託的每日模式',schema=ref('AiSettings'),body=ref('AiSettings'))},
       '/api/ai/settings':{'put':op('儲存帳戶 AI 純模擬設定；啟用需另有模型金鑰',schema=ref('AiSettings'),body=ref('AiSettings'))},
+      '/api/ai/pick-and-trade':{'post':op('AI 一鍵選股交易：非同步從流動性初篩的候選股中由模型選出最多 3 檔，信心達門檻者立即建立模擬委託（盤後以最近參考價掛下一個交易日的限價單），與 trade-now 共用每帳戶每日 10 次上限',code='202')},
       '/api/ai/trade-now':{'post':op('AI 立即交易：非同步呼叫模型分析一檔股票，達信心門檻就立即建立模擬委託（盤後以最近參考價掛下一個交易日的限價單），每帳戶每日最多 10 次',body={'type':'object','required':['symbol'],'properties':{'symbol':{'type':'string'}}},code='202')},
       '/api/ai/jobs':{'post':op('非同步建立三面向 AI 分析，可能產生模型 API 費用',body={'type':'object','required':['symbol'],'properties':{'symbol':{'type':'string'}}},code='202')},
       '/api/ai/jobs/{id}/execute':{'post':op('將今日 AI 建議轉成模擬委託；需開市、可信即時報價與風控',schema=ref('Order'),params=[param('id',where='path',required=True)])},

@@ -104,3 +104,13 @@ def test_cloud_start_dispatches_lambda_instead_of_background_thread(tmp_path,mon
     assert calls==[('alice',result['id'],0)]
     assert sr.start(store,None,'alice')['id']==result['id']
     assert len(calls)==1
+
+
+def test_market_shortlist_judges_freshness_per_exchange():
+    rows={
+        '2330':{'symbol':'2330','name':'台積電','exchange':'TWSE','as_of':'2026-11-24','price':223000,'turnover':90_000_000_000,'change':0},
+        '1101':{'symbol':'1101','name':'台泥','exchange':'TWSE','as_of':'2026-11-20','price':3000,'turnover':80_000_000_000,'change':0},
+        '6274':{'symbol':'6274','name':'台燿','exchange':'TPEx','as_of':'2026-11-25','price':74600,'turnover':5_000_000_000,'change':0},
+    }
+    symbols,_=sr.market_shortlist(SimpleNamespace(index=lambda:rows),limit=5)
+    assert symbols==['2330','6274']
