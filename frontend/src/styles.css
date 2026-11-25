@@ -2498,3 +2498,16 @@ footer {
 .order-status.expired { color: var(--muted); }
 .order-detail { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; white-space: normal; }
 td:has(> .order-status) { min-width: 230px; }
+
+/* AI trade-now: one click runs Gemini and places the paper order. */
+.trade-now { margin-bottom: 16px; }
+.trade-now .panel-heading h2 { display: flex; align-items: center; gap: 6px; }
+.trade-now > .panel-footnote, .trade-now > .muted { padding: 0 20px; }
+.trade-now-form { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; padding: 12px 20px 16px; }
+.trade-now-form .field { flex: 0 1 160px; }
+.trade-now-result { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 20px 20px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: #1b2128; }
+.trade-now-result p { flex-basis: 100%; margin: 0; }
+@media (max-width: 640px) {
+  .trade-now-form .field { flex: 1 1 100%; }
+  .trade-now-form button { width: 100%; }
+}
