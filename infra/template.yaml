@@ -671,6 +671,13 @@ Resources:
                   Action: secretsmanager:GetSecretValue
                   Resource: !Ref OpenAISecretArn
                 - !Ref AWS::NoValue
+              # AI trade-now places paper orders, which need Fugle quotes and price limits.
+              - !If
+                - HasFugleSecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref FugleSecretArn
+                - !Ref AWS::NoValue
               - Effect: Allow
                 Action: [logs:CreateLogStream, logs:PutLogEvents]
                 Resource: [!GetAtt AiWorkerLog.Arn, !GetAtt SelectionWorkerLog.Arn]
@@ -698,6 +705,7 @@ Resources:
           BAGLO_AI_PROVIDER: gemini
           BAGLO_GEMINI_SECRET_ARN: !Ref GeminiSecretArn
           BAGLO_GEMINI_MODEL: !Ref GeminiModel
+          BAGLO_FUGLE_SECRET_ARN: !Ref FugleSecretArn
           BAGLO_RELEASE_ID: !Ref ReleaseId
           BAGLO_SELECTION_WORKER: !Sub '${AWS::StackName}-selection'
           BAGLO_OPENAI_SECRET_ARN: !Ref OpenAISecretArn

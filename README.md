@@ -10,6 +10,7 @@ Baglo是台股AI研究與模擬交易平台，用於展示Serverless雲端架構
 - **API健康檢查：** <https://5ck9jrcbe3.execute-api.us-east-1.amazonaws.com/api/health>
 - **API文件（Swagger UI）：** <https://baglo.pages.dev/docs/>，規格檔為[`/api/openapi.json`](https://5ck9jrcbe3.execute-api.us-east-1.amazonaws.com/api/openapi.json)。公開資料API可以直接在頁面上按「Try it out」試打；帳戶、下單與AI相關API需要Cognito access token。
 - 訪客不用登入就能搜尋股票、查看K線與加入自選股；使用Google帳號登入後，可以模擬下單與開啟AI自動交易。
+- **AI一鍵選股交易：** 登入後到「AI自動交易」頁按「讓Gemini選股並下單」，Gemini會從成交金額最大的10檔股票（含自己的持股）選出最多3檔，信心達到門檻就立刻建立模擬委託。非交易時段會以最近參考價掛下一個交易日的限價單，所以任何時間都能測試。
 
 ## 開發理念
 有時候人類在交易的時候，沒有辦法做到很標準的停損停利，或者是因為人類因為自身情緒的波動，導致自己操作失誤。人終究思考的能力還是有限，不如來讓AI規劃看看策略，讓AI能夠自動交易！ 順便增進自己的技術！
@@ -22,6 +23,7 @@ Baglo是台股AI研究與模擬交易平台，用於展示Serverless雲端架構
 - 資金、持倉、委託與取消紀錄。
 - 技術面、基本面、籌碼面資料與AI模擬建議。
 - AI自動交易與回測流程；未通過資料、信心或風控條件時不建單。
+- AI一鍵選股交易：按一次按鈕，Gemini選股並立即建立模擬委託，不必等每天的排程；每個帳號每天最多10次。
 
 ## 雲端架構
 

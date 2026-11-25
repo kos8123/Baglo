@@ -2511,3 +2511,9 @@ td:has(> .order-status) { min-width: 230px; }
   .trade-now-form .field { flex: 1 1 100%; }
   .trade-now-form button { width: 100%; }
 }
+.trade-now-result header { display: flex; align-items: center; gap: 10px; flex-basis: 100%; }
+.trade-now-result header time { margin-left: auto; color: var(--muted); font-size: 14px; }
+.trade-now-picks { list-style: none; margin: 4px 0 0; padding: 0; flex-basis: 100%; display: grid; gap: 10px; }
+.trade-now-picks li { padding: 10px 12px; border-radius: 8px; background: #232a33; }
+.trade-now-picks li > div { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.trade-now-picks li p { margin: 6px 0 0; }
