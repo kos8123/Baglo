@@ -13,6 +13,8 @@ def _clock(monkeypatch, utc):
             return utc.astimezone(tz)
     monkeypatch.setattr(ai, 'datetime', Clock)
     monkeypatch.setattr(ai_pick, 'datetime', Clock)
+    # Job timestamps must come from the same clock, or the test breaks once the real date moves on.
+    monkeypatch.setattr(ai_pick, 'now', lambda: utc.isoformat())
 
 
 def _markets():
