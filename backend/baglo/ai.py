@@ -59,6 +59,21 @@ def register(store,account,enabled):
         return state,accounts
     store.mutate(AI_REGISTRY,op)
 
+def ensure_registered(store,account,state):
+    """Accounts that switched auto-trading on before the open schedule existed were never
+    added to it. Re-add them when their AI page is read; returns whether they are scheduled."""
+    if not open_to_all():
+        return account in scheduled_accounts(store)
+    if not settings(state)['enabled']:
+        return False
+    if account in scheduled_accounts(store):
+        return True
+    try:
+        register(store,account,True)
+    except DomainError:
+        return False
+    return True
+
 def settings(state):
     return state.get('ai_settings', {'enabled':False, 'symbols':['2330'], 'budget':1000000, 'min_confidence':0.7})
 

@@ -326,6 +326,7 @@ def test_history_pagination_bounds_and_month_offsets(service,monkeypatch):
     service.registry={'2330':{'symbol':'2330','exchange':'TWSE'}}
     service.index_until=float('inf')
     service.history('2330',months=2,offset_months=6)
-    assert 'date=20260501' in seen[0] and 'date=20260401' in seen[1]
+    # Months are fetched in parallel, so the request order is not fixed.
+    assert sorted(url.split('date=')[1][:8] for url in seen)==['20260401','20260501']
     for months,offset in [(7,0),(0,0),(2,-1),(6,115)]:
         with pytest.raises(DomainError):service.history('2330',months=months,offset_months=offset)

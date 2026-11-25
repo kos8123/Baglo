@@ -10,6 +10,12 @@ const CATALOG_SOURCES = [
   "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes",
 ];
 const PRIORITY_SYMBOLS = ["2330", "2317", "2454", "2308", "2881", "2882"];
+// Gap pass 1: early backfills kept whole months whose fetch failed transiently (the source
+// has them). Each stored history is checked once and its missing months fetched again.
+const GAP_VERSION = "1";
+const GAP_SCAN_SIZE = 25;
+const GAP_FETCH_BUDGET = 12;
+const MAX_OFFSET = 114;
 
 function orderCatalog(items) {
   const bySymbol = new Map(items.map((item) => [item.symbol, item]));
@@ -134,7 +140,10 @@ async function refreshSymbol(origin, bucket, symbol, savedAt) {
   await bucket.put(`history/v1/${symbol}/full.json`, JSON.stringify(merged), {
     httpMetadata: { contentType: "application/json; charset=utf-8" },
     // Keep the stored version so a refresh never marks an unrepaired history as repaired.
-    customMetadata: { savedAt, months: String(stored ? TARGET_MONTHS : 1), version: object?.customMetadata?.version || "" },
+    customMetadata: {
+      savedAt, months: String(stored ? TARGET_MONTHS : 1),
+      version: object?.customMetadata?.version || "", gaps: object?.customMetadata?.gaps || "",
+    },
   });
 }
 
@@ -154,6 +163,95 @@ async function needsBackfill(bucket, symbol) {
     customMetadata: { ...object.customMetadata, version: HISTORY_VERSION },
   });
   return false;
+}
+
+const monthIndex = (date) => Number(date.slice(0, 4)) * 12 + Number(date.slice(5, 7)) - 1;
+
+// Months between the first stored bar and last month that have no bars, as month indexes.
+function missingMonths(stored, today) {
+  const bars = stored?.bars || [];
+  if (!bars.length) return [];
+  const have = new Set(bars.map((bar) => monthIndex(bar.date)));
+  const missing = [];
+  for (let month = monthIndex(bars[0].date); month < monthIndex(today); month += 1) {
+    if (!have.has(month)) missing.push(month);
+  }
+  return missing;
+}
+
+// Requests (months, offset) that cover the missing months with as few calls as possible.
+// The API serves at most 6 months per call and offsets up to MAX_OFFSET months back.
+function gapRequests(missing, today) {
+  const current = monthIndex(today);
+  const requests = [];
+  let index = 0;
+  while (index < missing.length) {
+    const start = missing[index];
+    let end = Math.min(start + 5, current - 1);
+    let months = end - start + 1;
+    if (current - end > MAX_OFFSET) {
+      end = current - MAX_OFFSET;
+      months = 6;
+    }
+    requests.push({ months, offset: current - end });
+    while (index < missing.length && missing[index] <= end) index += 1;
+  }
+  return requests;
+}
+
+// Fetches the months missing from one stored history. A history with more gaps than one
+// run's budget is filled across runs: `gapsFrom` records the last month already requested.
+async function fillGaps(origin, bucket, symbol, today, budget) {
+  const key = `history/v1/${symbol}/full.json`;
+  const object = await bucket.get(key);
+  if (!object || object.customMetadata?.gaps === GAP_VERSION) return { used: 0, done: true };
+  const stored = await object.json();
+  const from = Number(object.customMetadata?.gapsFrom || -1);
+  const requests = gapRequests(missingMonths(stored, today).filter((month) => month > from), today);
+  if (requests.length > budget && budget < GAP_FETCH_BUDGET) return { used: 0, done: false };
+  const batch = requests.slice(0, budget);
+  const parts = [stored];
+  for (const { months, offset } of batch) {
+    try {
+      parts.push(await fetchHistory(origin, symbol, months, offset));
+    } catch {
+      // A month that still fails stays missing; this pass does not retry it.
+    }
+  }
+  const done = batch.length === requests.length;
+  const merged = mergeHistory(parts);
+  const filled = new Set(merged.bars.map((bar) => bar.date.slice(0, 7).replace("-", "")));
+  merged.warnings = merged.warnings.filter((warning) => !(warning.includes("暫無資料") && filled.has(warning.slice(0, 6))));
+  const metadata = { ...object.customMetadata };
+  if (done) {
+    metadata.gaps = GAP_VERSION;
+    delete metadata.gapsFrom;
+  } else {
+    metadata.gapsFrom = String(monthIndex(today) - batch.at(-1).offset);
+  }
+  await bucket.put(key, JSON.stringify(merged), {
+    httpMetadata: { contentType: "application/json; charset=utf-8" },
+    customMetadata: metadata,
+  });
+  return { used: batch.length, done };
+}
+
+// After the repair pass, checks every stored history once for missing months.
+async function gapNext(origin, bucket, catalog, state, today) {
+  if (!state.repairDone || (state.gapVersion === GAP_VERSION && state.gapDone)) return state;
+  // Wait for today's refresh: its 40 requests plus these would pass the per-run subrequest limit.
+  if (state.completedDay !== today) return state;
+  let cursor = state.gapVersion === GAP_VERSION ? state.gapCursor || 0 : 0;
+  const stop = Math.min(catalog.items.length, cursor + GAP_SCAN_SIZE);
+  let budget = GAP_FETCH_BUDGET;
+  while (cursor < stop && budget > 0) {
+    const { used, done } = await fillGaps(origin, bucket, catalog.items[cursor].symbol, today, budget);
+    budget -= used;
+    if (!done) break;
+    cursor += 1;
+  }
+  const done = cursor >= catalog.items.length;
+  return { ...state, gapVersion: GAP_VERSION, gapCursor: done ? 0 : cursor, gapDone: done };
 }
 
 // During the refresh phase, repairs histories saved before HISTORY_VERSION one symbol per
@@ -197,9 +295,10 @@ async function sync(env) {
   catalog.items = orderCatalog(catalog.items);
 
   if (state.phase === "refresh") {
-    const repaired = await repairNext(origin, bucket, catalog, state);
-    if (repaired !== state) {
-      state = repaired;
+    let updated = await repairNext(origin, bucket, catalog, state);
+    updated = await gapNext(origin, bucket, catalog, updated, today);
+    if (updated !== state) {
+      state = updated;
       await bucket.put("sync/state.json", JSON.stringify(state), { httpMetadata: { contentType: "application/json" } });
     }
   }
@@ -230,13 +329,17 @@ async function sync(env) {
   const complete = next >= catalog.items.length;
   await bucket.put("sync/state.json", JSON.stringify({
     cursor: complete ? 0 : next,
-    completedDay: complete ? today : state.completedDay,
+    // Finishing a backfill does not count as today's refresh: run one right after it.
+    completedDay: complete && state.phase === "refresh" ? today : state.completedDay,
     phase: complete && state.phase === "backfill" ? "refresh" : state.phase,
     targetMonths: TARGET_MONTHS,
     orderVersion: ORDER_VERSION,
     repairVersion: state.repairVersion,
     repairCursor: state.repairCursor,
     repairDone: state.repairDone,
+    gapVersion: state.gapVersion,
+    gapCursor: state.gapCursor,
+    gapDone: state.gapDone,
     total: catalog.items.length,
     updatedAt: new Date().toISOString(),
   }), { httpMetadata: { contentType: "application/json" } });
