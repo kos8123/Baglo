@@ -3,6 +3,7 @@ from copy import deepcopy
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import json
+import logging
 import hashlib
 from pathlib import Path
 import os
@@ -107,7 +108,9 @@ def update_job(store, account, job_id, values):
         raise DomainError('找不到 AI 工作',404)
     return store.mutate(account,op)
 
-def enqueue(store,markets,account,symbol,source='manual'):
+TRADE_NOW_DAILY_LIMIT=10
+
+def enqueue(store,markets,account,symbol,source='manual',auto_execute=False):
     if not configured():
         raise DomainError('尚未設定模型後端金鑰；富果金鑰不等於模型金鑰',409)
     markets.resolve(symbol)  # Verify against the provider registry, not a fixed watchlist.
@@ -122,7 +125,11 @@ def enqueue(store,markets,account,symbol,source='manual'):
         if previous:return state,{'job':previous,'new':False}
         if source!='schedule' and sum(j['status'] in ('queued','running') for j in jobs)>=6:
             raise DomainError('已有 AI 工作處理中，請稍候',409)
+        today_iso=datetime.now(TZ).date().isoformat()
+        if auto_execute and sum(1 for j in jobs if j.get('auto_execute') and j['created_at'][:10]==today_iso)>=TRADE_NOW_DAILY_LIMIT:
+            raise DomainError(f'今天的 AI 立即交易已達 {TRADE_NOW_DAILY_LIMIT} 次上限，明天再試',429)
         job={'id':job_id,'symbol':symbol,'status':'queued','created_at':now(),'source':source,'model':current_model()}
+        if auto_execute:job['auto_execute']=True
         today=datetime.now(TZ).date()
         keep=lambda j:j['status'] in ('queued','running') or (j.get('source')=='schedule' and datetime.fromisoformat(j['created_at']).astimezone(TZ).date()==today)
         state['ai_jobs']=[j for j in jobs if keep(j)]+[j for j in jobs if not keep(j)][-11:]+[job]
@@ -276,9 +283,11 @@ def run(store,markets,account,job_id,symbol):
     selected_model=next((j.get('model') for j in store.read(account).get('ai_jobs',[]) if j['id']==job_id),None) or current_model()
     try:
         history=markets.history(symbol,months=4)
-        if len(history['bars'])<60 or history['warnings']:raise DomainError('歷史資料不足或月份缺漏，停止 AI 分析')
+        # A month the source could not serve is reported to the model instead of stopping the analysis.
+        if len(history['bars'])<60:raise DomainError('歷史資料不足 60 個交易日，停止 AI 分析')
         stage='基本面與籌碼資料'
         snapshot={'symbol':symbol,'as_of':history['as_of'],'bars':history['bars'][-80:],'sma20':history['sma20'],'sma60':history['sma60'],
+                  'data_warnings':history['warnings'][:12],
                   'fundamentals':markets.fundamentals(symbol),'ownership':markets.ownership(symbol)}
         if not snapshot['fundamentals'].get('revenue') or not snapshot['fundamentals'].get('valuation') or snapshot['ownership'].get('status')!='available':
             raise DomainError('基本面或籌碼面資料不足，未呼叫模型、未建立委託')
@@ -298,6 +307,18 @@ def run(store,markets,account,job_id,symbol):
     except Exception as exc:
         # Never serialize raw provider errors: these can include request metadata.
         update_job(store,account,job_id,{'status':'failed','error':str(exc) if isinstance(exc,DomainError) else stage+'處理失敗，請稍後重試；未建立委託','error_stage':stage,'error_code':getattr(exc,'code',None),'model':selected_model,'completed_at':now()})
+        return
+    job=next((j for j in store.read(account).get('ai_jobs',[]) if j['id']==job_id),{})
+    if job.get('auto_execute'):
+        # "AI 立即交易": place the paper order as soon as the analysis finishes.
+        try:
+            order=execute(store,markets,account,job_id)
+            update_job(store,account,job_id,{'execution_note':order.get('execution_note') or '已依 AI 建議建立模擬委託'})
+        except DomainError as exc:
+            update_job(store,account,job_id,{'execution_note':str(exc)})
+        except Exception:
+            logging.exception('AI trade-now execution failed')
+            update_job(store,account,job_id,{'execution_note':'建立委託時發生錯誤，未建立委託'})
 
 def execute(store,markets,account,job_id,automatic=False):
     state=store.read(account);job=next((j for j in state.get('ai_jobs',[]) if j['id']==job_id),None)
@@ -311,11 +332,17 @@ def execute(store,markets,account,job_id,automatic=False):
     if automatic and not policy['enabled']:raise DomainError('自動模擬已停用',409)
     if decision['action']=='hold' or decision['confidence']<policy['min_confidence']:raise DomainError('本次為觀望或信心未達門檻',409)
     current=datetime.now(TZ)
-    if current.weekday()>=5 or not (9,0)<=(current.hour,current.minute)<=(13,30):raise DomainError('目前不在台股交易時段，不以歷史價建立 AI 委託',409)
+    in_session=current.weekday()<5 and (9,0)<=(current.hour,current.minute)<=(13,30)
+    # Scheduled runs only trade on a live quote. A user-initiated decision outside the session
+    # becomes a limit order at the latest reference price for the next session (ROD rules).
+    if automatic and not in_session:raise DomainError('目前不在台股交易時段，不以歷史價建立 AI 委託',409)
     if datetime.fromisoformat(job['created_at']).astimezone(TZ).date()!=current.date():raise DomainError('AI 分析非今日，不建立委託',409)
     symbol=job['symbol'];market=markets.quote(symbol,'odd_lot');quote=market['quote'];instrument=markets.order_instrument(symbol)
-    if quote['kind']!='live' or not quote['is_realtime']:raise DomainError('未取得可信即時零股成交參考，暫停 AI 委託',409)
+    live=quote['kind']=='live' and quote['is_realtime']
+    if automatic and not live:raise DomainError('未取得可信即時零股成交參考，暫停 AI 委託',409)
+    if not quote.get('price'):raise DomainError('目前取不到參考價格，未建立委託',409)
     price=quote['price'];price=price//stock_price_tick(price)*stock_price_tick(price)
+    note=None if live else ('盤中未取得即時成交，' if in_session else '非交易時段，')+'以最近參考價 '+f'{price/100:,.2f}'+' 元掛限價單，依下一個可成交時段撮合'
     key='ai-order-'+job_id
     def op(snapshot):
         existing=next((o for o in snapshot['orders'] if o['id']==key),None)
@@ -330,6 +357,7 @@ def execute(store,markets,account,job_id,automatic=False):
         changed,order=place_order(snapshot,body,key,instrument)
         order['source']='ai_auto' if automatic else 'ai_recommendation'
         order['ai_job_id']=job_id;order['quote_as_of']=quote.get('as_of');order['quote_source']=quote.get('source')
+        if note:order['execution_note']=note
         entry=next(j for j in changed['ai_jobs'] if j['id']==job_id);entry['order_id']=order['id'];entry['executed_at']=now()
         return changed,order
     return store.mutate(account,op)
