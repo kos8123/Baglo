@@ -368,6 +368,11 @@ def worker(event,context):
         from .watchlist_health import run
         run(get_store(), get_markets(), event['account'], event['key'])
         return {'status': 'processed'}
+    if event.get('type')=='pick_trade':
+        from .api import get_store, get_markets
+        from .ai_pick import run as run_pick
+        run_pick(get_store(), get_markets(), event['account'], event['job_id'])
+        return {'status': 'processed'}
     if event.get('type')=='backtest':
         from .api import get_markets
         from .backtest import run

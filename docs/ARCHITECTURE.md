@@ -49,6 +49,8 @@ EventBridge → Premarket Analysis → Stock Selection → AI Trading Worker
 - Stock Selection驗證資料完整度、評分多檔高流動性股票並呼叫Gemini。
 - AI Trading Worker套用信心、資金、曝險與持倉限制後建立模擬委託。
 - 任一資料、模型或風控步驟失敗時不建立委託，並保存失敗原因。
+- AI一鍵選股交易（`POST /api/ai/pick-and-trade`）：API Lambda只建立工作並非同步呼叫AI Worker，避免超過API Gateway的逾時。Worker從流動性初篩取前10檔（含持股），整理近期價量與均線後只呼叫一次Gemini比較全部候選，選出最多3檔；信心達門檻者立即建立模擬委託，盤中用即時價，非交易時段用最近參考價掛下一個交易日的限價單。每帳號每天最多10次，與單檔分析共用上限。
+- 初篩的資料新鮮度依交易所分別判斷：證交所收盤資料比櫃買中心晚一天公布，若用全市場同一日期，上市股票會整天被排除。
 - 排程對象：`AiAccounts`可填指定帳號，或填`*`開放給所有登入使用者。開放模式下，使用者打開自動交易開關時才寫入DynamoDB的名單紀錄，排程只讀這份名單，不掃整張表；名額上限預設20個帳號，每個帳號每天每檔只呼叫一次模型，費用有上限。
 
 ### Data, security and operations

@@ -17,7 +17,13 @@ def market_shortlist(markets, holdings=(), limit=SHORTLIST_SIZE):
     rows=list(markets.index().values())
     if not rows:raise DomainError('全市場清單暫時無法取得')
     latest=max(row.get('as_of','') for row in rows)
-    eligible=[row for row in rows if row.get('as_of')==latest and row.get('price') and
+    # TWSE publishes a day's close a day after TPEx, so freshness is judged per exchange;
+    # one market-wide date would drop every listed stock for most of the day.
+    newest={}
+    for row in rows:
+        exchange=row.get('exchange','')
+        newest[exchange]=max(newest.get(exchange,''),row.get('as_of',''))
+    eligible=[row for row in rows if row.get('as_of') and row.get('as_of')==newest.get(row.get('exchange',''))and row.get('price') and
               row.get('turnover') is not None and row['turnover']>=20_000_000 and
               not row.get('stale_cache') and
               (row.get('change') is None or abs(row['change'])<=row['price']*.07)]

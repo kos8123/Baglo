@@ -183,6 +183,9 @@ def handler(event, context):
         if method == 'POST' and path == '/api/ai/jobs':
             from .ai import enqueue
             return response(202,enqueue(get_store(),get_markets(),account,body.get('symbol')))
+        if method == 'POST' and path == '/api/ai/pick-and-trade':
+            from .ai_pick import enqueue as enqueue_pick
+            return response(202,enqueue_pick(get_store(),get_markets(),account))
         if method == 'POST' and path == '/api/ai/trade-now':
             from .ai import enqueue
             return response(202,enqueue(get_store(),get_markets(),account,body.get('symbol'),auto_execute=True))
