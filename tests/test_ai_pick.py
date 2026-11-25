@@ -44,7 +44,9 @@ def test_pick_and_trade_orders_each_confident_pick(setup, monkeypatch):
 
     def model(body, timeout):
         seen['candidates'] = [c['symbol'] for c in __import__('json').loads(body['input'][1]['content'])['candidates']]
-        return {'summary': '半導體量能放大', 'picks': [
+        return {'summary': '半導體量能放大', 'evaluations': [
+            {'symbol': '2330', 'view': 'buy', 'confidence': .82, 'comment': '站上均線'},
+            {'symbol': '2317', 'view': 'hold', 'confidence': .4, 'comment': '量縮整理'}], 'picks': [
             {'symbol': '2330', 'action': 'buy', 'confidence': .82, 'reason': '站上均線'},
             {'symbol': '2454', 'action': 'buy', 'confidence': .55, 'reason': '還在整理'},
             {'symbol': '9999', 'action': 'buy', 'confidence': .99, 'reason': '不在候選'}]}
@@ -60,11 +62,15 @@ def test_pick_and_trade_orders_each_confident_pick(setup, monkeypatch):
     assert not parent['picks'][1].get('order_id') and '信心' in parent['picks'][1]['note']
     assert [o['symbol'] for o in state['orders']] == ['2330'] and state['orders'][0]['limit_price'] == 100000
     assert '建立 1 筆' in parent['execution_note']
+    views = {e['symbol']: e for e in parent['evaluations']}
+    assert views['2330']['picked'] and views['2330']['view'] == 'buy'
+    assert not views['2317']['picked'] and views['2317']['comment'] == '量縮整理'
+    assert '2454' in views and 'view' not in views['2454']  # unrated candidates are still listed
 
 
 def test_pick_and_trade_with_no_picks_places_nothing(setup, monkeypatch):
     store, markets = setup
-    monkeypatch.setattr(ai, 'model_response', lambda body, timeout: {'summary': '大盤震盪，觀望', 'picks': []})
+    monkeypatch.setattr(ai, 'model_response', lambda body, timeout: {'summary': '大盤震盪，觀望', 'evaluations': [], 'picks': []})
     job = ai_pick.enqueue(store, markets, 'alice')
     ai_pick.run(store, markets, 'alice', job['id'])
     parent = store.read('alice')['ai_jobs'][-1]

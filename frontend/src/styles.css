@@ -2517,3 +2517,16 @@ td:has(> .order-status) { min-width: 230px; }
 .trade-now-picks li { padding: 10px 12px; border-radius: 8px; background: #232a33; }
 .trade-now-picks li > div { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .trade-now-picks li p { margin: 6px 0 0; }
+.trade-now-candidates { flex-basis: 100%; margin-top: 4px; }
+.trade-now-candidates summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.trade-now-candidates table { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: 14px; }
+.trade-now-candidates th, .trade-now-candidates td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+.trade-now-candidates th { color: var(--muted); font-weight: 500; }
+.trade-now-candidates tr.is-picked td { background: rgba(214, 255, 87, .06); }
+.trade-now-candidates .pill { margin-left: 6px; }
+@media (max-width: 640px) {
+  .trade-now-candidates table, .trade-now-candidates tbody, .trade-now-candidates tr, .trade-now-candidates td { display: block; }
+  .trade-now-candidates thead { display: none; }
+  .trade-now-candidates tr { padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .trade-now-candidates td { border: 0; padding: 2px 0; }
+}
