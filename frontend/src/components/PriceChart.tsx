@@ -217,7 +217,7 @@ export function PriceChart({
               className={period === p ? "selected" : ""}
               onClick={() => setPeriod(p)}
             >
-              {tr(names[p])}
+              {tr(names[p], "zh-TW")}
             </Button>
           ))}
         </div>
@@ -262,7 +262,7 @@ export function PriceChart({
             <Expand size={14} />
           </Button>
         </div>
-        <span className="source-note">{tr("未還原價格 · 紅漲綠跌")}</span>
+        <span className="source-note">{tr("未還原價格 · 紅漲綠跌", "zh-TW")}</span>
       </div>
       <div className="ohlc" aria-live="off">
         {readout ? (
@@ -279,13 +279,13 @@ export function PriceChart({
               ["收", readout.close],
             ].map(([label, value]) => (
               <span key={label}>
-                <small>{tr(label as string)}</small> {money(value as number)}
+                <small>{tr(label as string, "zh-TW")}</small> {money(value as number)}
               </span>
             ))}
             <span>
-              <small>{tr("量")}</small>{" "}
+              <small>{tr("量", "zh-TW")}</small>{" "}
               {readout.volume == null ? "—" : lots(readout.volume / 1000)}{" "}
-              {tr("張")}
+              {tr("張", "zh-TW")}
             </span>
           </>
         ) : (
