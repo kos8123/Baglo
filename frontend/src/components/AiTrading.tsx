@@ -26,6 +26,7 @@ interface Job {
   summary?: string;
   candidates?: string[];
   picks?: Pick[];
+  evaluations?: Evaluation[];
   result?: { action: string; confidence: number; reason: string; risk: string };
 }
 interface Pick {
@@ -38,6 +39,16 @@ interface Pick {
   quantity?: number;
   limit_price?: number;
   note?: string;
+}
+interface Evaluation {
+  symbol: string;
+  name?: string;
+  last_close?: number;
+  change_20d_pct?: number;
+  picked?: boolean;
+  view?: string;
+  confidence?: number;
+  comment?: string;
 }
 interface Status {
   configured: boolean;
@@ -99,11 +110,17 @@ export function AiTrading({
   useEffect(() => {
     if (!latestTrade || latestTrade.id === seenTrade || latestTrade.status !== "completed") return;
     setSeenTrade(latestTrade.id);
+    // Tell the user what Gemini chose, not only that the job finished.
+    if (seenTrade !== undefined || Date.now() - new Date(latestTrade.created_at).getTime() < 10 * 60_000) {
+      const chosen = (latestTrade.picks || []).map((pick) =>
+        `${pick.symbol}${pick.name ? " " + pick.name : ""}（${actionLabel[pick.action] || pick.action} ${(pick.confidence * 100).toFixed(0)}%${pick.order_id ? "，已下單" : "，未下單"}）`);
+      notify(chosen.length ? `Gemini 選了 ${chosen.join("、")}` : latestTrade.execution_note || "Gemini 這次沒有選股");
+    }
     if (latestTrade.picks?.some((pick) => pick.order_id)) {
       void client.invalidateQueries({ queryKey: ["account"] });
       void client.invalidateQueries({ queryKey: ["portfolio"] });
     }
-  }, [latestTrade, seenTrade, client]);
+  }, [latestTrade, seenTrade, client, notify]);
   const encoded = JSON.stringify(status.data?.settings);
   useEffect(() => {
     if (encoded && !changed) setPolicy(JSON.parse(encoded));
@@ -191,7 +208,7 @@ export function AiTrading({
               <span className={`pill ${latestTrade.status}`}>{statusLabel[latestTrade.status] || latestTrade.status}</span>
               <time>{dateLabel(latestTrade.created_at)}</time>
             </header>
-            <p>{latestTrade.error || latestTrade.execution_note || (tradeRunning ? "Gemini 正在讀取候選股的價量資料並比較，約需 20～60 秒。" : "")}</p>
+            <p>{latestTrade.error || latestTrade.execution_note || (tradeRunning ? (latestTrade.picks?.length ? "Gemini 已選好股票，正在建立模擬委託…" : "Gemini 正在讀取候選股的價量資料並比較，約需 20～60 秒。") : "")}</p>
             {latestTrade.summary && <p className="muted">{latestTrade.summary}</p>}
             {!!latestTrade.picks?.length && (
               <ul className="trade-now-picks">
@@ -212,6 +229,25 @@ export function AiTrading({
               </ul>
             )}
             {latestTrade.picks?.some((pick) => pick.order_id) && <p className="ai-order">可到「委託紀錄」查看。</p>}
+            {!!latestTrade.evaluations?.length && (
+              <details className="trade-now-candidates" open={!latestTrade.picks?.length}>
+                <summary>Gemini 看過的 {latestTrade.evaluations.length} 檔候選股</summary>
+                <table>
+                  <thead><tr><th>股票</th><th>收盤</th><th>20 日</th><th>看法</th><th>說明</th></tr></thead>
+                  <tbody>
+                    {latestTrade.evaluations.map((row) => (
+                      <tr key={row.symbol} className={row.picked ? "is-picked" : undefined}>
+                        <td><strong>{row.symbol}</strong> {row.name}{row.picked && <span className="pill completed">入選</span>}</td>
+                        <td>{row.last_close?.toLocaleString("zh-TW", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td>{row.change_20d_pct === undefined ? "—" : `${row.change_20d_pct > 0 ? "+" : ""}${row.change_20d_pct}%`}</td>
+                        <td>{row.view ? `${actionLabel[row.view] || row.view} ${((row.confidence || 0) * 100).toFixed(0)}%` : "—"}</td>
+                        <td>{row.comment || ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </details>
+            )}
           </div>
         )}
       </section>
