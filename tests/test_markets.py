@@ -330,3 +330,38 @@ def test_history_pagination_bounds_and_month_offsets(service,monkeypatch):
     assert sorted(url.split('date=')[1][:8] for url in seen)==['20260401','20260501']
     for months,offset in [(7,0),(0,0),(2,-1),(6,115)]:
         with pytest.raises(DomainError):service.history('2330',months=months,offset_months=offset)
+
+
+def test_limits_before_the_open_follow_the_last_close(service, monkeypatch):
+    monkeypatch.setenv('BAGLO_FUGLE_API_KEY', 'fixture')
+    def fetch(url, headers=None):
+        if '/ticker/' in url:
+            return {'symbol':'2330','date':'2026-11-19','limitDownPrice':1800,'limitUpPrice':2200,'referencePrice':2000}
+        if '/quote/' in url:
+            return {'symbol':'2330','date':'2026-11-19','closePrice':2150,'isClose':True,'openPrice':2100,'highPrice':2160,'lowPrice':2090,'lastPrice':2150}
+        raise AssertionError(url)
+    service.fetcher=fetch
+    limits=service.price_limits('2330')  # NOW is Friday 2026-11-20 11:00 Taipei; Fugle still on Thursday
+    assert limits['status']=='available' and limits['as_of']=='2026-11-20' and limits['derived_from']=='2026-11-19'
+    assert (limits['lower'],limits['upper'])==(193500,236500)  # 1935 and 2365 on the 5-dollar tick
+
+
+def test_limits_from_close_round_inward_to_the_tick(service, monkeypatch):
+    monkeypatch.setenv('BAGLO_FUGLE_API_KEY', 'fixture')
+    def fetch(url, headers=None):
+        if '/ticker/' in url:
+            return {'symbol':'2330','date':'2026-11-19','limitDownPrice':1,'limitUpPrice':2,'referencePrice':1}
+        return {'symbol':'2330','date':'2026-11-19','closePrice':47.35,'isClose':True}
+    service.fetcher=fetch
+    limits=service.price_limits('2330')
+    assert (limits['lower'],limits['upper'])==(4265,5200)  # 42.615->42.65, 52.085->52.0 (0.1 tick above 50)
+
+
+def test_limits_stay_unavailable_without_a_final_close(service, monkeypatch):
+    monkeypatch.setenv('BAGLO_FUGLE_API_KEY', 'fixture')
+    def fetch(url, headers=None):
+        if '/ticker/' in url:
+            return {'symbol':'2330','date':'2026-11-19','limitDownPrice':1800,'limitUpPrice':2200,'referencePrice':2000}
+        return {'symbol':'2330','date':'2026-11-19','closePrice':2150,'isClose':False}
+    service.fetcher=fetch
+    assert service.price_limits('2330')['status']=='unavailable'

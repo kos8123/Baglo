@@ -248,11 +248,32 @@ class MarketService:
             if data.get('symbol') != symbol or not lower or not upper or lower > upper or cached['stale_cache'] or not 0 <= age <= 4:
                 raise DataUnavailable('漲跌停資料不完整或過期')
             if local.weekday() < 5 and as_of != local.isoformat():
-                raise DataUnavailable('尚未取得當日漲跌停資料')
+                # Fugle publishes a weekday's limits shortly before the open. Until then (and on
+                # a market holiday) the next session's limits follow from the last close.
+                return self._limits_from_close(symbol, key, as_of, local)
             return {'status': 'available', 'lower': lower, 'upper': upper, 'reference': cents(data.get('referencePrice')),
                     'as_of': as_of, 'source': 'Fugle', 'historical_session': as_of != local.isoformat()}
         except Exception:
             return {'status': 'unavailable', 'reason': '無法確認漲跌停範圍；暫停新增委託，不以昨收推算'}
+
+    def _limits_from_close(self, symbol, key, last_session, local):
+        """TWSE/TPEx rule: the limits are the reference (previous close) +-10%, rounded inward to
+        the tick at the limit price. Uses Fugle's close of the last session it published."""
+        from .domain import stock_price_tick
+        url = 'https://api.fugle.tw/marketdata/v1.0/stock/intraday/quote/'+symbol
+        cached = self.cache.get('fugle:'+symbol+':board_lot', lambda: self.fetcher(url, {'X-API-KEY': key}), ttl=30)
+        data = cached['data']
+        reference = cents(data.get('closePrice'))
+        if data.get('symbol') != symbol or str(data.get('date', '')) != last_session or not data.get('isClose') or not reference:
+            raise DataUnavailable('尚未取得前一交易日收盤價')
+        upper = reference*11//10
+        upper -= upper % stock_price_tick(upper, local)
+        lower = -(-reference*9//10)
+        tick = stock_price_tick(lower, local)
+        lower += (-lower) % tick
+        return {'status': 'available', 'lower': lower, 'upper': upper, 'reference': reference,
+                'as_of': local.isoformat(), 'source': 'Fugle 前一交易日收盤推算', 'historical_session': False,
+                'derived_from': last_session}
 
     def search(self, query='', low=None, high=None):
         rows = list(self.index().values())
