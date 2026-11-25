@@ -44,8 +44,7 @@ import { Portfolio } from "./components/Portfolio";
 import { AutoTrading } from "./components/AutoTrading";
 import { Research } from "./components/Research";
 import { Watchlist } from "./components/Watchlist";
-import { htmlLang, readLanguage, tr, type Language } from "./language";
-import { LanguageMenu } from "./components/LanguageMenu";
+import { htmlLang, tr, type Language } from "./language";
 const SELECTED_KEY = "baglo_selected_stock";
 const GUEST_WATCHLIST_KEY = "baglo_guest_watchlist";
 function readGuestWatchlist(): Instrument[] | null {
@@ -90,12 +89,10 @@ export default function App() {
   );
 }
 function Terminal({ config }: { config: Config }) {
-  const [language, setLanguage] = useState<Language>(readLanguage);
-  const changeLanguage = (next: Language) => {
-    try { localStorage.setItem("baglo_language", next); } catch { /* private mode: keep it for this visit only */ }
-    document.documentElement.lang = htmlLang(next);
-    setLanguage(next);
-  };
+  // The terminal is Traditional Chinese only: its screens, server messages and AI output are
+  // not translated, so offering other languages here showed half-translated pages. The public
+  // home page keeps its five languages.
+  const language: Language = "zh-TW";
   useEffect(() => { document.documentElement.lang = htmlLang(language); }, []);
   const queryClient = useQueryClient();
   const fetching = useIsFetching();
@@ -435,7 +432,6 @@ function Terminal({ config }: { config: Config }) {
           <div className="wordmark">
             Baglo<span className="product-name">{tr("交易終端", language)}</span>
           </div>
-          <LanguageMenu language={language} onChange={changeLanguage} />
           <div className="connection">
             <i />
             {config.demo
