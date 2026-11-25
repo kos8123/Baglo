@@ -76,7 +76,10 @@ def ensure_registered(store,account,state):
     return True
 
 def settings(state):
-    return state.get('ai_settings', {'enabled':False, 'symbols':['2330'], 'budget':1000000, 'min_confidence':0.7})
+    # With the open schedule, accounts start with auto-trading on so a new sign-in (an
+    # interviewer, say) sees it working; saving the switch off is kept like any choice.
+    default_on=open_to_all() and configured()
+    return state.get('ai_settings', {'enabled':default_on, 'symbols':['2330'], 'budget':1000000, 'min_confidence':0.7})
 
 def status(state):
     return {'provider':provider(), 'configured':configured(), 'model':current_model(), 'settings':settings(state),

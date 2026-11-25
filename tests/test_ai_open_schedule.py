@@ -57,3 +57,14 @@ def test_ensure_registered_reports_a_full_quota(store, monkeypatch):
     register(store, 'alice', True)
     assert ensure_registered(store, 'bob', enabled) is False
     assert scheduled_accounts(store) == ['alice']
+
+
+def test_new_accounts_start_with_auto_trading_on_in_open_mode(monkeypatch):
+    from baglo.ai import settings
+    monkeypatch.setenv('BAGLO_AI_PROVIDER', 'gemini')
+    monkeypatch.setenv('BAGLO_GEMINI_API_KEY', 'fixture-only')
+    monkeypatch.setenv('BAGLO_AI_ACCOUNTS', '*')
+    assert settings({})['enabled'] is True
+    assert settings({'ai_settings': {'enabled': False, 'symbols': ['2330'], 'budget': 1000000, 'min_confidence': .7}})['enabled'] is False
+    monkeypatch.setenv('BAGLO_AI_ACCOUNTS', 'alice')
+    assert settings({})['enabled'] is False
