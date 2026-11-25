@@ -350,9 +350,15 @@ function Terminal({ config }: { config: Config }) {
   // A newer completed daily bar may be available before the quote catalog refreshes.
   const taipei = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const lastCompletedBar = bars.filter(bar => bar.date < taipei).at(-1);
-  const closeReference = lastCompletedBar && (!current.as_of || lastCompletedBar.date > current.as_of)
-    ? { price: lastCompletedBar.close, date: lastCompletedBar.date, source: history.data?.pages[0].source || "日 K 資料" }
-    : { price: current.price, date: current.as_of, source: current.source || current.exchange || "行情來源" };
+  // The official close arrives a day late, so the header follows today's Fugle candle when
+  // it is newer; otherwise the header and the chart's last candle disagree after the close.
+  const todayBar = sessionBar.data?.bar;
+  const closeReference: { price?: number | null; date?: string; source: string; live?: boolean } =
+    todayBar && (!current.as_of || todayBar.date > current.as_of)
+      ? { price: todayBar.close, date: todayBar.date, source: todayBar.final ? "Fugle · 今日收盤" : "Fugle · 今日盤中", live: !todayBar.final }
+      : lastCompletedBar && (!current.as_of || lastCompletedBar.date > current.as_of)
+        ? { price: lastCompletedBar.close, date: lastCompletedBar.date, source: history.data?.pages[0].source || "日 K 資料" }
+        : { price: current.price, date: current.as_of, source: current.source || current.exchange || "行情來源" };
   const research = useQuery({
     queryKey: ["research", current.symbol],
     queryFn: ({ signal }) =>
@@ -527,7 +533,7 @@ function Terminal({ config }: { config: Config }) {
                 </h1>
                 <div className="daily-close">
                   <strong>{money(closeReference.price)}</strong>
-                  <small>{selectedReference.isPending && !closeReference.date ? "讀取收盤資料…" : `收盤資料日 ${closeReference.date || "尚未取得"}`}</small>
+                  <small>{selectedReference.isPending && !closeReference.date ? "讀取收盤資料…" : `${closeReference.live ? "盤中資料日" : "收盤資料日"} ${closeReference.date || "尚未取得"}`}</small>
                   {closeReference.date && <small>{closeReference.source} · {closeReference.date < taipei ? "歷史收盤參考，非即時行情" : "依來源提供日期"}</small>}
                   <Button variant="ghost" size="sm" disabled={selectedReference.isFetching} onClick={() => void selectedReference.refetch()}>{selectedReference.isFetching ? "更新中…" : "更新參考價"}</Button>
                   {current.stale_cache && <small role="status">來源暫未更新，顯示舊快取</small>}
