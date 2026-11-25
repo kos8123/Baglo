@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Bot, CalendarClock, Cpu } from "lucide-react";
+import { Bot, CalendarClock, Cpu, Zap } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, dateLabel, money } from "../lib";
 import type { Config, Instrument } from "../types";
@@ -20,6 +20,7 @@ interface Job {
   error?: string;
   execution_note?: string;
   order_id?: string;
+  auto_execute?: boolean;
   result?: { action: string; confidence: number; reason: string; risk: string };
 }
 interface Status {
@@ -38,6 +39,7 @@ export function AiTrading({
   pipeline,
   research,
   results,
+  current,
 }: {
   pipeline?: ReactNode;
   research?: ReactNode;
@@ -68,6 +70,28 @@ export function AiTrading({
           : false,
   });
   const [changed, setChanged] = useState(false);
+  const [tradeSymbol, setTradeSymbol] = useState(current.symbol);
+  useEffect(() => setTradeSymbol(current.symbol), [current.symbol]);
+  const tradeNow = useMutation({
+    mutationFn: (symbol: string) =>
+      api<Job>("/ai/trade-now", { method: "POST", body: JSON.stringify({ symbol }) }),
+    onSuccess: (job) => {
+      void client.invalidateQueries({ queryKey: ["ai"] });
+      notify(`Gemini 開始分析 ${job.symbol}，完成後會依建議直接建立模擬委託`);
+    },
+    onError: (e: Error) => notify(e.message, true),
+  });
+  const latestTrade = status.data?.jobs.filter((job) => job.auto_execute).at(-1);
+  const tradeRunning = !!latestTrade && ["queued", "running"].includes(latestTrade.status);
+  const [seenTrade, setSeenTrade] = useState<string | undefined>();
+  useEffect(() => {
+    if (!latestTrade || latestTrade.id === seenTrade || !latestTrade.execution_note) return;
+    setSeenTrade(latestTrade.id);
+    if (latestTrade.order_id) {
+      void client.invalidateQueries({ queryKey: ["account"] });
+      void client.invalidateQueries({ queryKey: ["portfolio"] });
+    }
+  }, [latestTrade, seenTrade, client]);
   const encoded = JSON.stringify(status.data?.settings);
   useEffect(() => {
     if (encoded && !changed) setPolicy(JSON.parse(encoded));
@@ -137,6 +161,31 @@ export function AiTrading({
         ))}
       </div>
       {status.error && <div className="inline-error">{status.error.message}</div>}
+      <section className="panel trade-now">
+        <div className="panel-heading"><h2><Zap size={16} /> AI 立即交易</h2><span className="badge">隨時可測試</span></div>
+        <p className="panel-footnote">
+          讓 Gemini 現在分析一檔股票，信心達到門檻（目前 {confidence}%）就直接用虛擬資金建立模擬委託。
+          盤中以即時價下單；非交易時段以最近參考價掛限價單，下一個交易日依真實行情撮合。觀望或信心不足就不下單。每帳戶每天最多 10 次。
+        </p>
+        <form className="trade-now-form" onSubmit={(e) => { e.preventDefault(); if (/^[1-8]\d{3}$/.test(tradeSymbol)) tradeNow.mutate(tradeSymbol); else notify("請輸入四位數上市櫃股票代號", true); }}>
+          <label className="field">股票代號
+            <input inputMode="numeric" maxLength={4} value={tradeSymbol} onChange={(e) => setTradeSymbol(e.target.value.trim())} />
+          </label>
+          <Button type="submit" disabled={!enabled || tradeNow.isPending || tradeRunning}>
+            {tradeNow.isPending ? "送出中…" : tradeRunning ? "Gemini 分析中…" : "讓 Gemini 分析並下單"}
+          </Button>
+        </form>
+        {!enabled && <p className="muted">登入後即可使用。</p>}
+        {latestTrade && (
+          <div className="trade-now-result" role="status">
+            <strong>{latestTrade.symbol}</strong>
+            <span className={`pill ${latestTrade.status}`}>{statusLabel[latestTrade.status] || latestTrade.status}</span>
+            {latestTrade.result && <span className={`pill action-${latestTrade.result.action}`}>{actionLabel[latestTrade.result.action]} {(latestTrade.result.confidence * 100).toFixed(0)}%</span>}
+            <p>{latestTrade.error || latestTrade.execution_note || (tradeRunning ? "Gemini 正在讀取技術面、基本面與籌碼面資料並分析，約需 10～60 秒。" : "")}</p>
+            {latestTrade.order_id && <p className="ai-order">已建立模擬委託，可到「委託紀錄」查看。</p>}
+          </div>
+        )}
+      </section>
       {pipeline}
       <div className="ai-columns">
         <section className="panel ai-settings">
